@@ -73,10 +73,13 @@ The native desktop test is opt-in because it briefly moves the actual mouse poin
 
 ## Build the Windows package
 
-From the project folder on Windows 11 x64, use an isolated Python 3.12 x64 build environment.
+For a release build, download and extract the pinned Astral CPython
+3.12.16 Windows x64 archive. Verify its SHA-256 against the release entry.
+In the commands below, set the interpreter path to the extracted
+`python\python.exe`. [Astral runtime release](https://github.com/astral-sh/python-build-standalone/releases/tag/20261110) · [Exact archive](https://github.com/astral-sh/python-build-standalone/releases/download/20261110/cpython-3.12.16%2B20261110-x86_64-pc-windows-msvc-install_only.tar.gz)
 
 ```powershell
-py -3.12 -m venv .build-venv
+& 'PATH-TO-EXTRACTED-RUNTIME\python\python.exe' -m venv .build-venv
 & .\.build-venv\Scripts\python.exe -m pip install -r requirements-build.txt
 & .\packaging\build-windows.ps1 -Python .\.build-venv\Scripts\python.exe
 ```

@@ -94,9 +94,22 @@ try {
         Remove-Item -LiteralPath $file.FullName
     }
 
+    # The notices cover the traceable Astral Windows x64 build, including its libffi fork.
+    $runtimeHashes = @{
+        'python312.dll' = '659761ee44cb66968b7ef15570a021beed8181c11e9c81dec53e4851a58f549f'
+        'libffi-8.dll' = '0f6efcceab5949720114ab45511c7226dc02303b57d223968b0ad5310f96d41f'
+    }
+    foreach ($component in $runtimeHashes.GetEnumerator()) {
+        $binary = Join-Path $runtime $component.Key
+        if (-not (Test-Path -LiteralPath $binary -PathType Leaf) -or
+            (Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash -ne $component.Value) {
+            throw "Unexpected $($component.Key). Use the pinned runtime described in README.md."
+        }
+    }
+
     $licenses = Join-Path $bundle 'LICENSES'
     New-Item -ItemType Directory -Path $licenses | Out-Null
-    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'licenses\Qt') -Destination $licenses -Recurse
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'licenses\Qt'), (Join-Path $PSScriptRoot 'licenses\Python') -Destination $licenses -Recurse
     $pythonLicense = & $interpreter -c "import sys; from pathlib import Path; print(Path(sys.base_prefix) / 'LICENSE.txt')"
     $pyInstallerLicense = & $interpreter -c "from importlib.metadata import distribution; d = distribution('pyinstaller'); print(next(d.locate_file(p) for p in d.files if p.name == 'COPYING.txt'))"
     if ($LASTEXITCODE -ne 0) { throw 'Could not locate the PyInstaller license.' }

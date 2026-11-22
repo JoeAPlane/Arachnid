@@ -5,6 +5,8 @@ folder. Open the Arachnid folder and double-click Arachnid.exe. Keep the
 _internal folder beside it. Python is bundled and your preferences carry over.
 This portable build is unsigned. Review its origin and the published checksum
 before opening it.
+Requires the x64 Microsoft Visual C++ v14 Redistributable.
+https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist
 
 Left-click to pet the scorpion. It crouches, wags its tail, and shows a heart. When picked up, it trails the
 cursor briefly, kicks its legs, and pouts until you put it down.
@@ -23,9 +25,9 @@ settings profile.
 On startup, Arachnid pulls open a rift with its front legs and walks out.
 Blackout Red is the default for a fresh settings profile.
 
-In Settings, pick Graphite, Foundry, Glacier, Blackout Red, or EdgeRunner,
+In Settings, pick Graphite, Foundry, Glacier, Blackout Red, or Industrial Yellow,
 then choose Save. The Size slider previews sizes from 70% to 150%.
-EdgeRunner has weathered yellow plating, exposed wiring, and a segmented
+Industrial Yellow has weathered yellow plating, exposed wiring, and a segmented
 cyan visor that glitches briefly on wake-up and pickup.
 Click sound is muted by default. Preferences are stored per Windows user.
 Enable Bird's-eye view to roam in any direction on the current display.

@@ -37,7 +37,7 @@ Version 0.5.1 corrects fullscreen detection for conventional maximized windows, 
 
 ## Desktop controls and finishes
 
-Version 0.6 added weighted pickup, overhead roaming, manual Rest/Wake Up, and underside crawling. Version 0.7 adds the Windows tray controls and gives Neon Runner its own chassis and visor in both views.
+Version 0.6 added weighted pickup, overhead roaming, manual Rest/Wake Up, and underside crawling. Version 0.7 adds the Windows tray controls and gives the yellow finish its own chassis and visor in both views.
 
 The 0.7.1 desktop reliability pass verifies the 0.7.0 binary through the Explorer notification area and at both 100% and 150% Qt scaling. The native navigation test now uses an isolated preference file. See the [test report](TEST_REPORT.md) for results.
 

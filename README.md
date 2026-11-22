@@ -4,7 +4,9 @@ A portable desktop companion for Windows 11 x64. A six-legged robot wanders, res
 
 ## Run Arachnid on Windows
 
-Quit any earlier preview, then extract `Arachnid-1.0.0-startup-win-x64.zip` to its own folder. Open the extracted **Arachnid** folder and double-click **Arachnid.exe**. Keep the adjacent `_internal` folder in place. The package includes Python, the Qt libraries, and the servo sound. Your existing Windows preferences carry over. Launching the same settings profile again reopens the running companion.
+Use Windows 11 x64 and Microsoft’s latest supported x64 Visual C++ v14 Redistributable. Install it from Microsoft if it is missing. Extract the entire ZIP before running the executable. [Microsoft Visual C++ downloads](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist)
+
+Quit any earlier preview, then extract `Arachnid-1.0.0-win-x64.zip` to its own folder. Open the extracted **Arachnid** folder and double-click **Arachnid.exe**. Keep the adjacent `_internal` folder in place. The package includes Python, the Qt libraries, and the servo sound. Your existing Windows preferences carry over. Launching the same settings profile again reopens the running companion.
 
 On startup, Arachnid pulls open a rift with its front legs and walks out. Blackout Red is the default for a fresh profile. Your saved finish carries over.
 
@@ -38,7 +40,7 @@ Use the **Size** slider to preview sizes from 70% to 150%. **Save** applies your
 
 Enable **Bird’s-eye view** in Settings to see the robot from above and let it walk in any direction across the current display. The default side view keeps window climbing and perching available.
 
-Choose **Blackout Red** for charcoal armor with red optics or **EdgeRunner** for weathered industrial-yellow plating, exposed wiring, a black chassis, and a segmented cyan visor that glitches briefly on wake-up and pickup.
+Choose **Blackout Red** for charcoal armor with red optics or **Industrial Yellow** for weathered yellow plating, exposed wiring, and a segmented cyan visor.
 
 For upside-down crawling, use the side view and drop Arachnid just below the active window with roughly 130 logical pixels of clearance below its bottom edge. It hooks its feet onto the underside, turns at the ends, and detaches if the edge no longer fits.
 
@@ -52,6 +54,14 @@ You can also drop it beside the lower half of either side. With clearance below,
 
 Arachnid hides and suspends its behavior for fullscreen apps, then restores your last Show/Hide choice when you return to the desktop. Ordinary maximized windows with a title bar keep it visible. Version 0.7.2 was checked with a live VALORANT lobby and a separate Direct3D 9 fullscreen fixture on one 1920 × 1080 display. Physical mixed-DPI testing and system sleep/resume remain open.
 
+## Privacy
+
+Arachnid reads the cursor position and foreground window geometry, window handle, and process ID to react, climb and hide over fullscreen apps. It keeps preferences in your Windows user profile or in the INI file you specify with `--settings-file`. Relaunching uses a same-user local Windows pipe. Arachnid has no telemetry or outbound internet connections. The optional `--watch-windows` flag logs window handles, process IDs, and bounds locally. Review that output before sharing it.
+
+## License
+
+The original Arachnid code and assets are under the [MIT License](LICENSE). Bundled components have their own licenses. [Third-party notices](packaging/THIRD_PARTY_NOTICES.txt)
+
 ## Development
 
 ```powershell
@@ -61,7 +71,7 @@ Arachnid hides and suspends its behavior for fullscreen apps, then restores your
 
 The native desktop test is opt-in because it briefly moves the actual mouse pointer. Its setup and the remaining desktop checks are in the [test report](TEST_REPORT.md). See the [architecture](ARCHITECTURE.md), [technical decisions](DECISIONS.md), and [project plan](PROJECT_PLAN.md) for implementation context.
 
-## Build the Windows preview
+## Build the Windows package
 
 From the project folder on Windows 11 x64, use an isolated Python 3.12 x64 build environment.
 
@@ -71,4 +81,4 @@ py -3.12 -m venv .build-venv
 & .\packaging\build-windows.ps1 -Python .\.build-venv\Scripts\python.exe
 ```
 
-The script creates the portable app folder, ZIP, and SHA-256 checksum under `build\win-x64`. Use `-OutputDirectory` to select a fresh destination for another build.
+The script puts the portable app folder, ZIP, SHA-256 checksum, and PyInstaller files under `Documents\ARACHNID\<version>`. For another build of the same version, pass `-OutputDirectory` with a fresh subfolder of `Documents\ARACHNID`. The script refuses a destination containing a previous build.

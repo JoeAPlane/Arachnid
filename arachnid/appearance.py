@@ -18,5 +18,5 @@ FINISHES = {
     "foundry": Finish("Foundry", ("#f4bc7b", "#995537"), "#ffe3b6", "#ffe18e"),
     "glacier": Finish("Glacier", ("#f4faff", "#7e9db8"), "#e2f6ff", "#8bdcfd"),
     "blackout": Finish("Blackout Red", ("#45414b", "#16151c"), "#dc4756", "#ff334e", "#4a3d48"),
-    "neon": Finish("EdgeRunner", ("#ffdf4a", "#aa700f"), "#e8b824", "#52f9ff", "#303139"),
+    "neon": Finish("Industrial Yellow", ("#ffdf4a", "#aa700f"), "#e8b824", "#52f9ff", "#303139"),
 }

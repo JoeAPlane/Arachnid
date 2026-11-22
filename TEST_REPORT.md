@@ -1,5 +1,13 @@
 # Test report
 
+## 1.0.0 release hardening
+
+With PySide6 Essentials and Shiboken6 6.11.3, all 68 tests passed on the development Windows PC with the native desktop tests enabled. Two interactive tests failed during a run concurrent with packaging and passed when the suite ran on its own. The ZIP passed its SHA-256 checksum and all 151 entries passed ZIP integrity checks.
+
+The Windows executable launched, hid when its window closed, and reopened the original process on three concurrent launches. A separate check confirmed that the packaged app initialized its tray window and kept the overlay hidden while a fullscreen window was in front. The native source tests covered Quit. The packaged menu Quit automation did not complete. Check it manually on a clean Windows 11 x64 installation with the Visual C++ Redistributable.
+
+
+
 ## 1.0.0 startup update
 
 The extracted Windows build held its overlay in place during the rift animation, resumed walking afterward, and saved Blackout Red on a fresh profile. Regression tests cover playing the entrance once per launch, cancelling it when hidden, and preserving existing finish choices. The final build also passed the paused launch check. All 68 native tests passed at 100% Qt scaling.
@@ -12,11 +20,11 @@ The full native suite reported 65 passed at both 100% and 150% Qt scaling. The e
 
 ## 0.9.2 · Expressions and curled sleep
 
-Reviewed rendered petting and sleep poses for EdgeRunner and Graphite in both views. The native suite passed all 63 tests, including the petting eyes and transitions into and out of curled sleep. The extracted Windows build saved the curled-sleep setting, loaded it after relaunch, and completed Rest and Wake Up. The ZIP passed its archive and SHA-256 checks.
+Reviewed rendered petting and sleep poses for the yellow finish and Graphite in both views. The native suite passed all 63 tests, including the petting eyes and transitions into and out of curled sleep. The extracted Windows build saved the curled-sleep setting, loaded it after relaunch, and completed Rest and Wake Up. The ZIP passed its archive and SHA-256 checks.
 
 ## 0.9.1 · Branding and interaction preview
 
-Windows extracted the new scorpion icon from the packaged executable, whose product name reads Arachnid. The packaged size slider changed the desktop overlay from 176 to 264 logical pixels at 150% and restored that size after relaunch. The existing finish key continues to load as Edge Runner. The native suite passed all 61 tests, including click-through, the petting reaction, and drag behavior. Source tests verified scaled window contact and persisted size settings.
+Windows extracted the new scorpion icon from the packaged executable, whose product name reads Arachnid. The packaged size slider changed the desktop overlay from 176 to 264 logical pixels at 150% and restored that size after relaunch. The existing finish key continued to load the yellow finish. The native suite passed all 61 tests, including click-through, the petting reaction, and drag behavior. Source tests verified scaled window contact and persisted size settings.
 
 ## 0.9.0 · Windows release candidate
 
@@ -31,7 +39,7 @@ Windows extracted the new scorpion icon from the packaged executable, whose prod
 
 During the active 0.9.0 sample, CPU averaged 11.70% in intervals with a position change. Average private memory moved from 25.46 MiB in the first 10 seconds to 25.27 MiB in the last 10 seconds. Paused, hidden, and fullscreen samples recorded zero position changes. Both builds restored visibility after fullscreen and exited cleanly while hidden. These results cover a single desktop session with short inactive-state measurements.
 
-The relocated package loaded Python, Qt Core, and the Windows Qt platform plugin from its own bundle. On a fresh INI profile, Settings saved Neon Runner, bird’s-eye view, and both independent click effects. A new executable process loaded those choices and saved them again. A separate Windows account remains pending.
+The relocated package loaded Python, Qt Core, and the Windows Qt platform plugin from its own bundle. On a fresh INI profile, Settings saved the yellow finish, bird’s-eye view, and both independent click effects. A new executable process loaded those choices and saved them again. A separate Windows account remains pending.
 
 The Explorer tray menu passed four additional Hide and Show cycles, along with opening Settings while hidden, pausing, resting, waking, and quitting while hidden. All 59 native tests passed at both 100% and 150% Qt scaling. The release ZIP passed its SHA-256 and per-entry CRC checks.
 
@@ -59,19 +67,19 @@ The extracted package passed pickup, underside attachment, window resize trackin
 
 The navigation test now uses an isolated INI profile so the user's saved view cannot affect the side-view perch check. Native fixture focus and pointer acquisition now retry on the shared desktop. The earlier interruptions were in fixture setup and pointer targeting. This pass produced test and documentation changes. The verified download is 0.7.0.
 
-## 0.7.0 · Windows tray and Neon Runner
+## 0.7.0 · Windows tray and yellow finish
 
 **November 22, 2026.** The standard source suite reported 51 passed and two opt-in tests skipped. The extracted package registered the ARACHNID icon in Explorer's hidden-icons panel and opened its native menu. A scripted tray callback followed by mouse selections verified Hide, Show, Pause/Resume, Rest/Wake Up, opening Settings while hidden, and exiting with status 0 while hidden and asleep.
 
-The extracted package passed a live Neon Runner drop, window resize, underside crawl, and menu exit at 150% Qt scaling. Sampled side and overhead walking and pickup poses kept a transparent border. The 100% packaged run stopped when it could not focus its fixture. The full opt-in source suite reported 52 passed and one interruption when the pointer moved off its target during the desktop input test.
+The extracted package passed a live drop using the yellow finish, window resize, underside crawl, and menu exit at 150% Qt scaling. Sampled side and overhead walking and pickup poses kept a transparent border. The 100% packaged run stopped when it could not focus its fixture. The full opt-in source suite reported 52 passed and one interruption when the pointer moved off its target during the desktop input test.
 
-In a side-by-side paused sample, the packaged working set rose from 54.44 MiB in 0.6.1 to 56.05 MiB in 0.7.0. Private memory rose from 24.60 to 25.47 MiB. The running 0.7.0 Neon Runner used 63.41 MiB of working set and 27.00 MiB of private memory during the live underside crawl.
+In a side-by-side paused sample, the packaged working set rose from 54.44 MiB in 0.6.1 to 56.05 MiB in 0.7.0. Private memory rose from 24.60 to 25.47 MiB. The running 0.7.0 yellow variant used 63.41 MiB of working set and 27.00 MiB of private memory during the live underside crawl.
 
 A 100-second offscreen Qt stress run rendered 6,240 frames while cycling five finishes and repeating 39 routes with pickup, release, resize, and detachment. The 95th-percentile render time was 1.49 ms. The harness working set went from 61.15 to 62.68 MiB and peaked at 62.73 MiB. Private memory went from 40.74 to 40.84 MiB and peaked at 40.95 MiB. These measurements cover a short synthetic render workload.
 
 ## 0.6.1 · Underside crawling and finishes
 
-**November 22, 2026.** The source suite reported 48 passed and two opt-in tests skipped. The freshly extracted package passed native checks at 100% Qt scaling with Blackout Red and at 150% with Neon Runner. Both checks dropped the robot under a normal window, moved and resized the window, observed horizontal crawling along its bottom edge, and quit from the menu.
+**November 22, 2026.** The source suite reported 48 passed and two opt-in tests skipped. The freshly extracted package passed native checks at 100% Qt scaling with Blackout Red and at 150% with the yellow finish. Both checks dropped the robot under a normal window, moved and resized the window, observed horizontal crawling along its bottom edge, and quit from the menu.
 
 A 100-second offscreen Qt stress run rendered 6,250 frames across 40 routes while cycling all five finishes and repeating pickup, release, resize, and detachment. Render time at the 95th percentile was 1.35 ms. The harness working set rose from 60.69 to 62.20 MiB, peaking at 62.24 MiB. Private memory rose from 40.24 to 40.34 MiB. These are short-run harness measurements.
 
@@ -157,7 +165,7 @@ For a manual check, move the cursor away and watch for a crouched resting pose w
 **November 21, 2026.** All 25 tests passed at native scale and again with a process-local `QT_SCALE_FACTOR=1.5` override. Both runs exercised native Windows pointer input against a separate application process.
 
 - The gait tests verified planted-foot motion, swing clearance, and fixed lengths for the two leg segments. The renderer kept a transparent perimeter across 48 sampled poses.
-- Windows accepted pointer input on a painted foot and correctly found the underlying test window at the old foot position after the leg moved. Cross-process click-through, hover, click feedback, drag release, interrupted capture, the **Quit ARACHNID** menu, and window awareness also passed.
+- Windows accepted pointer input on a painted foot and correctly found the underlying test window at the old foot position after the leg moved. Cross-process click-through, hover, click feedback, drag release, interrupted capture, the **Quit Arachnid** menu, and window awareness also passed.
 - A quick click followed by a press at the same point previously let Qt's double-click event bypass drag initiation. A regression test covers the fix.
 - The prototype switches facing at work-area edges and settles into a standing pose when paused or held. Physical mixed-DPI monitor crossings, hot-plug, and extended runs under load still need verification. The display and input checks below apply to this prototype as well.
 
@@ -173,7 +181,7 @@ Each short performance sample lasted about 12.5 seconds on one 1920 × 1080 disp
 | --- | --- |
 | Setup | A new workspace virtual environment installed the pinned packages. `pip check` reported no broken requirements. |
 | Launch and exit | The documented module entry point launched successfully on three consecutive runs. Windows close messages ended the default and custom-speed runs. A real Ctrl+C console event ended the paused run. All three exit codes were 0. |
-| Rendering and input | The native Windows test sent pointer input through a transparent corner to a separate process. On the painted body, entering with the cursor updated hover state and clicking changed the fill color. A drag crossed beyond the original shape before release. A real right-click opened the menu and selecting **Quit ARACHNID** closed the overlay. |
+| Rendering and input | The native Windows test sent pointer input through a transparent corner to a separate process. On the painted body, entering with the cursor updated hover state and clicking changed the fill color. A drag crossed beyond the original shape before release. A real right-click opened the menu and selecting **Quit Arachnid** closed the overlay. |
 | Interrupted input | Forcibly releasing Win32 mouse capture reproduced a stalled press. After the capture-loss fix, the same test observed the overlay cancel the press before the mouse button was released. |
 | Movement | The Qt tests exercised pause, resume, suspension during a press, and a bounce inside the display work area. Unit tests covered geometry clamping, negative display origins, fractional movement, and edge reflection. |
 | Window awareness | The Windows test detected a separate process's test window and refreshed its visible bounds after it moved and resized. It detected minimization, restoration, and closure. The scan excluded the overlay. |
@@ -194,11 +202,11 @@ Position updates measure the animation cadence inside Qt. Displayed frame rate, 
 
 ## Desktop checklist
 
-- **Input over everyday apps.** Start with `--paused` over a browser or editor. Click and scroll in all four transparent corners and between the legs. Confirm that the underlying app receives those inputs and keeps keyboard focus. Click the character and verify its sensor color changes.
+- **Input over everyday apps.** Start with `--paused` over a browser or editor. Click and scroll in all four transparent corners and between the legs. Confirm that the underlying app receives those inputs and keeps keyboard focus. Click the character and verify it reacts to petting.
 - **Boundary and interruption behavior.** Drag against every screen edge and the taskbar, then release. Confirm the overlay stays reachable and resumes when appropriate. Alt+Tab or lock and unlock the desktop during a drag, then check that a fresh click or drag works.
 - **Display changes.** With two physical monitors at different scaling settings, drag across both directions and across offset edges. Change resolution or disconnect the display holding the overlay and confirm it returns to a usable work area. The Qt scaling override exercised one display. Physical mixed-DPI monitor crossings and display hot-plug still need testing. Automatic movement stays on the active monitor.
 - **Window movement under load.** Launch with `--watch-windows`, then move, resize, minimize, restore, and close an ordinary app while the overlay moves. Look for the updates after each change. The scanner samples snapshots every half second, so brief changes can be missed. Check pointer response and smoothness while other apps are busy, including a full-screen app.
-- **Longer run.** Leave the overlay moving and paused for several minutes each. Compare CPU and working set in Task Manager and try **Quit ARACHNID** after each run.
+- **Longer run.** Leave the overlay moving and paused for several minutes each. Compare CPU and working set in Task Manager and try **Quit Arachnid** after each run.
 
 ## Re-run the native desktop test
 

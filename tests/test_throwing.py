@@ -256,10 +256,10 @@ def test_throw_preference_defaults_on_and_saves_from_settings(companion):
 @pytest.mark.parametrize(("size", "birdseye"), [(70, False), (150, False), (150, True)])
 def test_painted_throw_stays_inside_work_area(companion, size, birdseye):
     pet, _ = companion
-    pet._preferences = Preferences(size=size, birdseye=birdseye, finish="neon")
+    pet._preferences = Preferences(size=size, birdseye=birdseye, finish="safety-ochre")
     pet._resize_pet()
     pet._puppet.set_birdseye(birdseye)
-    pet._puppet.set_finish("neon")
+    pet._puppet.set_finish("safety-ochre")
     screen = pet._current_screen()
     area = screen.availableGeometry()
     pet._place(QPoint(area.x() + area.width() - pet.width() - 10, area.y() + 15), screen)

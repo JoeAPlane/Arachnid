@@ -78,7 +78,7 @@ def test_qt_click_pets_the_companion_and_press_suspends_motion(overlay):
 
 
 @pytest.mark.parametrize("birdseye", [False, True])
-@pytest.mark.parametrize("finish", ["graphite", "neon"])
+@pytest.mark.parametrize("finish", ["graphite", "safety-ochre"])
 def test_walking_and_pickup_poses_fit_inside_the_transparent_overlay(overlay, birdseye, finish):
     overlay._puppet.set_finish(finish)
     overlay._puppet.set_birdseye(birdseye)
@@ -541,3 +541,19 @@ def test_saved_finish_is_kept_when_default_changes(tmp_path):
 
 def test_companion_is_painted_when_intro_is_skipped(overlay):
     assert overlay._puppet._intro_progress == 1
+
+
+
+@pytest.mark.parametrize("legacy", ["neon", "Industrial Yellow"])
+def test_replaced_finish_migrates_without_resetting_other_preferences(tmp_path, app, legacy):
+    store = QSettings(str(tmp_path / "legacy.ini"), QSettings.Format.IniFormat)
+    store.setValue("appearance/finish", legacy)
+    store.setValue("appearance/size", 126)
+    store.setValue("appearance/birdseye", True)
+    store.setValue("interaction/throwing", False)
+    preferences = Preferences.load(store)
+    assert preferences == Preferences(finish="safety-ochre", size=126, birdseye=True, throwing=False)
+    assert store.value("appearance/finish") == legacy
+    assert preferences.save(store)
+    assert store.value("appearance/finish") == "safety-ochre"
+    assert Preferences.load(store) == preferences

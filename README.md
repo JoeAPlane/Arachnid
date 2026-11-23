@@ -59,7 +59,8 @@ cursor history in memory only during a grab and clears it when the grab ends.
 
 Enable **Bird’s-eye view** in Settings to see the robot from above and let it walk in any direction across the current display. The default side view keeps window climbing and perching available.
 
-Choose **Blackout Red** for charcoal armor with red optics or **Industrial Yellow** for weathered yellow plating, exposed wiring, and a segmented cyan visor.
+Choose **Blackout Red** for charcoal armor with red optics or **Safety Ochre** for ochre enamel, dark trim, grey-green linkages, and warm work lights.
+Saved Industrial Yellow profiles automatically use Safety Ochre.
 
 For upside-down crawling, use the side view and drop Arachnid just below the active window with roughly 130 logical pixels of clearance below its bottom edge. It hooks its feet onto the underside, turns at the ends, and detaches if the edge no longer fits.
 

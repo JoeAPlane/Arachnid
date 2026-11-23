@@ -13,6 +13,10 @@ original finishes carry over from 1.0.0.
   Arachnid flies, absorbs the landing, and resumes roaming. Slow releases still
   put it down gently. Disable **Enable Throwing** in **Settings** if you prefer.
 
+**Safety Ochre** replaces Industrial Yellow. It uses the standard Arachnid
+chassis with an ochre enamel palette, grey-green linkages, and warm work lights.
+Existing Industrial Yellow selections open as Safety Ochre.
+
 ## Install
 
 Use Windows 11 x64 and the latest supported **Microsoft Visual C++ v14 x64
@@ -29,6 +33,24 @@ Get-Content .\Arachnid-1.1.0-win-x64.zip.sha256
 The executable is unsigned and may trigger a Windows SmartScreen warning.
 A verified clean Windows 11 x64 installation remains untested. Physical
 desktop-edge routes stay on one display.
+
+## Qt Network security assessment
+
+The package contains Qt Network 6.11.3, which remains affected by
+[CVE-2026-116337](https://www.qt.io/blog/security-issue-cve-2026-116337?hsLang=en).
+The two Qt 6.11 patches limit the HTTP response status line and header block
+in Qt's HTTP client. Arachnid's only Qt Network calls use `QLocalServer` and
+`QLocalSocket` for single-instance detection. The Windows pipe is restricted
+to the same user and its name is derived from the profile. A connection
+signals the existing window to reopen. Arachnid closes the connection
+without reading or interpreting its contents. The app creates no HTTP
+client, fetches no URLs, and has no route from application input to the
+affected HTTP parser.
+
+A patched compatible Windows x64 PySide6 wheel was unavailable when assessed.
+The bundled library still contains the affected code. Reassess this finding
+if Arachnid adds HTTP functionality, and update Qt when a compatible patched
+wheel becomes available.
 
 ## License and corresponding source
 

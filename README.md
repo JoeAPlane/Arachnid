@@ -2,6 +2,10 @@
 
 A free, open-source robot scorpion that wanders, climbs, and keeps you company on your Windows desktop.
 
+<p align="center">
+  <img src="assets/Arachnid-1.1.0-hero.gif" alt="A red and black robot scorpion walks left, climbs the desktop edge, and rounds the corner to crawl upside down." width="520">
+</p>
+
 ## [⬇ Download for Windows (1.1.0)](https://github.com/JoeAPlane/Arachnid/releases/download/v1.1.0/Arachnid-1.1.0-win-x64.zip)
 
 Windows 11 x64 · [Latest stable release and checksum](https://github.com/JoeAPlane/Arachnid/releases/latest)

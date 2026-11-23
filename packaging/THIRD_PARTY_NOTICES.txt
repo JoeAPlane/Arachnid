@@ -1,4 +1,4 @@
-Arachnid 1.0.0 | Third-party notices
+Arachnid 1.1.0 | Third-party notices
 
 Qt 6.11.3, PySide6 Essentials 6.11.3, and Shiboken6 6.11.3
 Copyright The Qt Company Ltd. and the upstream contributors.
@@ -9,7 +9,11 @@ Compatible modified libraries can be used by replacing those files.
 Recipients may replace or modify the LGPL libraries and reverse engineer
 the application to debug those modifications as permitted by the LGPL.
 
-Upstream sources for these versions:
+Bundled Qt modules include Qt Core, GUI, Widgets and Network from Qt Base,
+and image plugins from Qt Base and Qt Image Formats. PySide6 and Shiboken6
+supply the Python bindings. Qt Network supports the local Windows pipe.
+
+Corresponding upstream source archives (no Arachnid patches):
 https://download.qt.io/official_releases/qt/6.11/6.11.3/submodules/qtbase-everywhere-src-6.11.3.tar.xz
 https://download.qt.io/official_releases/qt/6.11/6.11.3/submodules/qtimageformats-everywhere-src-6.11.3.tar.xz
 https://download.qt.io/official_releases/QtForPython/pyside6/PySide6-6.11.3-src/pyside-setup-everywhere-src-6.11.3.tar.xz

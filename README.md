@@ -1,12 +1,16 @@
-# Arachnid 1.0.0
+# Arachnid 1.1.0
 
-A portable desktop companion for Windows 11 x64. A six-legged robot wanders, rests, watches the cursor, and can climb and perch on the edges of the active desktop window.
+A portable desktop companion for Windows 11 x64. A six-legged robot wanders, rests, watches the cursor, climbs and perches on windows, and explores the sides and ceiling of the desktop. Version 1.1 smooths gait, corners, perching, and idle movement and adds flick-to-throw with landing recovery.
 
 ## Run Arachnid on Windows
 
 Use Windows 11 x64 and Microsoft’s latest supported x64 Visual C++ v14 Redistributable. Install it from Microsoft if it is missing. Extract the entire ZIP before running the executable. [Microsoft Visual C++ downloads](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist)
 
-Quit any earlier preview, then extract `Arachnid-1.0.0-win-x64.zip` to its own folder. Open the extracted **Arachnid** folder and double-click **Arachnid.exe**. Keep the adjacent `_internal` folder in place. The package includes Python, the Qt libraries, and the servo sound. Your existing Windows preferences carry over. Launching the same settings profile again reopens the running companion.
+Quit any earlier preview, then extract `Arachnid-1.1.0-win-x64.zip` to its own folder. Open the extracted **Arachnid** folder and double-click **Arachnid.exe**. Keep the adjacent `_internal` folder in place. The package includes Python, the Qt libraries, and the servo sound. Your existing Windows preferences carry over. Launching the same settings profile again reopens the running companion.
+
+The executable is unsigned, so Windows SmartScreen may show a warning. Verify
+the SHA-256 against the release's matching checksum file before launching.
+A verified clean Windows 11 installation remains untested.
 
 On startup, Arachnid pulls open a rift with its front legs and walks out. Blackout Red is the default for a fresh profile. Your saved finish carries over.
 
@@ -38,7 +42,7 @@ Enable **Curl up while sleeping** in Settings to tuck the legs and wrap the tail
 
 Use the **Size** slider to preview sizes from 70% to 150%. **Save** applies your chosen size on the desktop.
 
-## Preview throwing in the 1.1.0 development build
+## Throwing
 
 Hold the left button over Arachnid and move it normally to pick it up.
 Release while flicking quickly to throw it, or slow down before releasing
@@ -71,7 +75,7 @@ Arachnid hides and suspends its behavior for fullscreen apps, then restores your
 
 ## Privacy
 
-Arachnid reads the cursor position and foreground window geometry, window handle, and process ID to react, climb and hide over fullscreen apps. It keeps preferences in your Windows user profile or in the INI file you specify with `--settings-file`. Relaunching uses a same-user local Windows pipe. Arachnid has no telemetry or outbound internet connections. The optional `--watch-windows` flag logs window handles, process IDs, and bounds locally. Review that output before sharing it.
+Arachnid reads the cursor position and foreground window geometry, window handle, and process ID to react, climb and hide over fullscreen apps. Throwing keeps at most a short history of pointer positions in memory during a grab. The history is cleared when the grab ends. It keeps preferences in your Windows user profile or in the INI file you specify with `--settings-file`. Relaunching uses a same-user local Windows pipe. Arachnid has no telemetry or outbound internet connections. The optional `--watch-windows` flag logs window handles, process IDs, and bounds locally. Review that output before sharing it.
 
 ## License
 
@@ -103,7 +107,7 @@ The script puts the portable app folder, ZIP, SHA-256 checksum, and PyInstaller 
 
 ## Preview physical desktop edges
 
-Use the normal side view. From the Phase 7.2 checkout, run:
+Use the normal side view. Run:
 
 ```powershell
 & .\.venv\Scripts\python.exe -m arachnid --desktop-edge-preview --settings-file phase72-preview.ini

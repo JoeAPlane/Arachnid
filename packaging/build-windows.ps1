@@ -81,6 +81,13 @@ try {
         $file = Join-Path $runtime $name
         if (Test-Path -LiteralPath $file) { Remove-Item -LiteralPath $file }
     }
+    # Arachnid does not install a QTranslator. The automatic collection can
+    # include independent Qt translation modules that the app never loads.
+    $translations = Join-Path $runtime 'PySide6\translations'
+    if (Test-Path -LiteralPath $translations -PathType Container) {
+        Get-ChildItem -LiteralPath $translations -File -Filter '*.qm' |
+            ForEach-Object { Remove-Item -LiteralPath $_.FullName }
+    }
     # Distribute the app separately from Microsoft's redistributable. The
     # supported host installs and services the runtime through Microsoft's installer.
     $excludedLibraries = '^(libcrypto.*|libssl.*|msvcp140.*|vcruntime140.*|Qt6Svg.*|q(svg|svgicon|opensslbackend))\.dll$'

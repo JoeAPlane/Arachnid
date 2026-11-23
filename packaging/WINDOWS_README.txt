@@ -1,10 +1,10 @@
-Arachnid 1.0.0 | Windows 11 x64 portable release
+Arachnid 1.1.0 | Windows 11 x64 portable release
 
 Quit any earlier preview, then extract the entire archive to its own
 folder. Open the Arachnid folder and double-click Arachnid.exe. Keep the
 _internal folder beside it. Python is bundled and your preferences carry over.
-This portable build is unsigned. Review its origin and the published checksum
-before opening it.
+This portable build is unsigned. Windows SmartScreen may warn about it.
+Check the download origin and the published SHA-256 before opening it.
 Requires the x64 Microsoft Visual C++ v14 Redistributable.
 https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist
 
@@ -35,7 +35,14 @@ Use the side view to climb and perch on application windows.
 Drop Arachnid just below a window with room underneath to crawl upside down.
 Or drop it beside the lower half of either side to watch it descend
 and round the bottom corner. A higher drop leads toward the top.
-Drag sideways to see the chassis lean, then release to see it settle.
+Drag sideways to see the chassis lean. Release slowly for a normal drop or
+release during a fast flick to throw it. Arachnid absorbs the landing and
+resumes roaming. Grab it again to interrupt a throw. Disable Enable Throwing
+in Settings to use normal drops every time.
+
+In side view, Arachnid occasionally climbs a clear physical screen edge,
+turns at the upper corner, and crawls upside down along the top boundary.
+A taskbar blocks the edge it occupies. Routes stay on the active display.
 In bird's-eye view, the robot shortens its stride during sharp turns.
 
 To try climbing, focus an unmaximized app window with room around it.
@@ -49,10 +56,9 @@ windows that are maximized.
 Optional PowerShell launch flags from the extracted folder:
     Start-Process .\Arachnid.exe -ArgumentList '--paused'
     Start-Process .\Arachnid.exe -ArgumentList '--speed','180'
+    Start-Process .\Arachnid.exe -ArgumentList '--desktop-edge-preview'
 
-On one 1920 x 1080 Windows display, the overlay hid over the live VALORANT
-lobby. It also hid and returned during tests with borderless fullscreen and
-a Direct3D 9 fullscreen swap chain. Physical mixed-DPI monitor changes and
-system sleep/resume still need verification.
+The package is intended for Windows 11 x64. A verified clean Windows 11
+installation and physical mixed-DPI display changes remain untested.
 
 See THIRD_PARTY_NOTICES.txt and LICENSES for the bundled components.

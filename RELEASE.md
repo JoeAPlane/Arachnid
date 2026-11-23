@@ -1,24 +1,48 @@
-# Arachnid 1.0 release guide
+# Arachnid 1.1.0 — Movement & Interaction Update
 
-## Windows download
+Arachnid is a free, open-source mechanical scorpion companion for Windows.
+The six-legged side-profile robot roams your desktop, follows the cursor,
+lets you pet it, climbs windows, and can rest or sleep. The tray controls and
+original finishes carry over from 1.0.0.
 
-Local builds are saved under `Documents\ARACHNID\<version>`, including the executable, Windows ZIP, and SHA-256 file.
+- **Desktop-edge climbing.** Arachnid occasionally climbs a clear side of the
+  active screen, rounds an upper corner, and traverses the top upside down.
+- **Smoother movement.** Walking, stopping, perching, and turning have smoother
+  transitions. The six legs plant more steadily, and the tail follows the chassis.
+- **Flick-to-throw.** Grab with the left button and release during a quick flick.
+  Arachnid flies, absorbs the landing, and resumes roaming. Slow releases still
+  put it down gently. Disable **Enable Throwing** in **Settings** if you prefer.
 
-The 1.0 release is a portable x64 ZIP for Windows 11 with the supported Microsoft Visual C++ v14 x64 Redistributable. Extract it to a permanent folder and open `Arachnid.exe`. Keep `_internal` beside the executable. Closing the companion hides it in the notification area. Reopening the executable or clicking its tray icon brings it back. **Quit Arachnid** exits the process.
+## Install
 
-Publish the Windows ZIP and its `.sha256` file together. The archive includes Python, Qt, third-party notices, and license texts. The current package is unsigned. Windows SmartScreen can warn about an unsigned download, and managed devices may block it. For a signed Windows release, obtain a trusted publisher identity, sign and timestamp the executable before packaging, then verify the signature and regenerate the ZIP checksum. [Microsoft’s Windows signing options](https://learn.microsoft.com/windows/apps/package-and-deploy/code-signing-options) · [SmartScreen reputation](https://learn.microsoft.com/windows/apps/package-and-deploy/smartscreen-reputation)
+Use Windows 11 x64 and the latest supported **Microsoft Visual C++ v14 x64
+Redistributable**. Download the matching ZIP and checksum, verify the SHA-256,
+and extract the entire archive. Open `Arachnid.exe` with the adjacent
+`_internal` folder in place. Quit any previous Arachnid instance before launching.
+Existing settings carry over. [Microsoft Visual C++ download](https://aka.ms/vc14/vc_redist.x64.exe)
 
-## Draft release notes
+```powershell
+Get-FileHash .\Arachnid-1.1.0-win-x64.zip -Algorithm SHA256
+Get-Content .\Arachnid-1.1.0-win-x64.zip.sha256
+```
 
-**Arachnid 1.0.0 for Windows** is the first stable build of the desktop scorpion companion. Pet it, pick it up, let it crawl around a window, or enable bird’s-eye roaming. The tray gives you quick access to Show, Hide, Rest, Wake Up, Settings, and Quit. Pick a finish, adjust the size, and choose whether it curls up to sleep. Arachnid hides when a fullscreen app takes focus and returns according to your visibility setting.
+The executable is unsigned and may trigger a Windows SmartScreen warning.
+A verified clean Windows 11 x64 installation remains untested. Physical
+desktop-edge routes stay on one display.
 
-On startup, Arachnid pries open a rift and walks onto the desktop. Fresh profiles start with Blackout Red.
+## License and corresponding source
 
-Existing Arachnid preferences carry over. Start by quitting your earlier preview, then extract the entire 1.0 ZIP to its own folder. Windows 11 x64 is the release target. The current download is unsigned.
+Arachnid uses the [MIT License](LICENSE). The ZIP contains
+`THIRD_PARTY_NOTICES.txt` and the individual license texts.
+[Third-party notices](packaging/THIRD_PARTY_NOTICES.txt)
 
-## GitHub publishing
+The shared libraries are Qt 6.11.3 and PySide6 Essentials/Shiboken6 6.11.3.
+The matching source archives are available from Qt at no charge.
 
-1. Review the hardened 1.0.0 source and MIT license in the private repository before approving public visibility.
-2. Commit the source and tag the exact commit used to build the download. Use `v1.0.0` in the public repository after confirming that tag is available. Create a draft GitHub Release on the matching tag and paste the release notes above.
-3. Attach `Arachnid-1.0.0-win-x64.zip` and its `.sha256` file as release assets. GitHub also supplies a source archive from the tag. The Windows ZIP includes the runnable executable and its bundled libraries. Include the corresponding Qt Base and PySide/Shiboken source links from the package notices alongside the binary download. Verify that they match the files distributed and remain accessible.
-4. Verify the ZIP checksum and test the download on a clean Windows 11 x64 installation with the Microsoft Visual C++ x64 Redistributable before publishing. A public repository is useful for source and release downloads. GitHub also supports releases and assets in private repositories for people with access. [GitHub Releases](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases) · [Creating a draft release and attaching files](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository)
+- [Qt Base 6.11.3](https://download.qt.io/official_releases/qt/6.11/6.11.3/submodules/qtbase-everywhere-src-6.11.3.tar.xz)
+- [Qt Image Formats 6.11.3](https://download.qt.io/official_releases/qt/6.11/6.11.3/submodules/qtimageformats-everywhere-src-6.11.3.tar.xz)
+- [PySide6 and Shiboken6 6.11.3](https://download.qt.io/official_releases/QtForPython/pyside6/PySide6-6.11.3-src/pyside-setup-everywhere-src-6.11.3.tar.xz)
+
+Local builds are saved in a subfolder of `Documents\ARACHNID`. Use the
+[build instructions](README.md#build-the-windows-package) to reproduce the
+portable package from the exact release source.

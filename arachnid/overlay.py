@@ -10,7 +10,7 @@ from random import choice
 from time import perf_counter
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, QSettings, QTimer, Qt
+from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, QSettings, QTimer, Qt, QVariantAnimation
 from PySide6.QtGui import QCursor, QGuiApplication, QIcon, QPainter, QScreen
 from PySide6.QtWidgets import (
     QApplication,
@@ -27,7 +27,7 @@ from .desktop_edges import (
     ATTACH_TIME, DesktopEdge, DesktopPose, DesktopRoute, DesktopTrack, SurfaceContact, smooth,
 )
 from .feedback import play_click
-from .movement import advance, clamp_origin, weighted_offset
+from .movement import advance, angle_delta, clamp_origin, ramp_speed, weighted_offset
 from .navigation import Edge, WindowRoute
 from .settings import Preferences, SettingsDialog
 
@@ -50,6 +50,7 @@ class Overlay(QGraphicsView):
     WIDTH = MechanicalPuppet.WIDTH
     HEIGHT = MechanicalPuppet.HEIGHT
     FRAME_MS = 16
+    WINDOW_MOUNT_TIME = 0.18
 
     def __init__(self, speed: float, paused: bool, store: QSettings | None = None,
                  *, startup: bool = False, desktop_preview: bool = False) -> None:
@@ -92,14 +93,24 @@ class Overlay(QGraphicsView):
         self._velocity = speed
         self._heading = radians(-32)
         self._speed_scale = 0.0
+        self._braking = False
         self._behavior = Behavior()
         self._foreground: ForegroundWindow | None = None
         self._route: WindowRoute | None = None
+        self._window_mount_offset = QPointF()
+        self._window_mount_angle = 0.0
+        self._window_mount_progress = 1.0
+        self._window_mount = QVariantAnimation(self)
+        self._window_mount.setDuration(round(self.WINDOW_MOUNT_TIME * 1000))
+        self._window_mount.setStartValue(0.0)
+        self._window_mount.setEndValue(1.0)
+        self._window_mount.valueChanged.connect(self._set_window_mount)
         self._desktop_route: DesktopRoute | None = None
         self._desktop_transfer: _EdgeTransfer | None = None
         self._desktop_screen: QScreen | None = None
         self._desktop_geometry = None
         self._desktop_cooldown = 14.0
+        self._desktop_reverse_pending = False
         self.fullscreen_suppressed = False
         self._user_hidden = False
         self._paused = paused
@@ -358,8 +369,12 @@ class Overlay(QGraphicsView):
         self._route = WindowRoute.near(surface, self._allowed_centers(screen), center, facing, travel, scale=self.width() / self.WIDTH)
         if self._route is None:
             return False
-        self._puppet.stand(immediate=True)
+        pose = self._route.pose()
+        self._window_mount_offset = self._center() - pose.center
+        self._window_mount_angle = angle_delta(pose.angle, self._puppet.angle)
+        self._window_mount_progress = 0.0
         self._place_on_window(screen)
+        self._window_mount.start()
         return True
 
     def _follow_window(self) -> None:
@@ -375,17 +390,32 @@ class Overlay(QGraphicsView):
         else:
             self._place_on_window(screen)
 
-    def _place_on_window(self, screen: QScreen, distance: float = 0) -> None:
+    def _set_window_mount(self, progress: float) -> None:
+        self._window_mount_progress = progress
+        if self._route is not None and self.isVisible() and self._press is None:
+            screen = self._current_screen()
+            if screen is not None:
+                self._place_on_window(screen)
+
+    def _place_on_window(self, screen: QScreen, distance: float = 0, elapsed: float = 0.0) -> None:
         pose = self._route.pose()
-        position = pose.center - QPointF(self.width() / 2, self.height() / 2)
+        center, angle = pose.center, pose.angle
+        if self._window_mount_progress < 1:
+            remaining = 1 - smooth(self._window_mount_progress)
+            center += self._window_mount_offset * remaining
+            angle += self._window_mount_angle * remaining
+        position = center - QPointF(self.width() / 2, self.height() / 2)
         self._place(position.toPoint(), screen)
-        self._puppet.walk(distance, pose.facing, pose.angle)
+        self._puppet.walk(distance / self.transform().m11(), pose.facing, angle, elapsed=elapsed)
 
     def _leave_window(self) -> None:
         if self._route is None:
             return
         self._route = None
-        self._puppet.stand(immediate=True)
+        self._window_mount.stop()
+        self._window_mount_progress = 1.0
+        self._puppet.stand()
+        self._puppet.level_after_release()
         self._puppet.walk(0, 1 if self._velocity > 0 else -1)
 
     @staticmethod
@@ -438,7 +468,7 @@ class Overlay(QGraphicsView):
 
     def _reverse_desktop(self) -> None:
         if self._desktop_route is not None and self._desktop_transfer is None:
-            self._desktop_route.direction *= -1
+            self._desktop_reverse_pending = True
 
     def _detach_desktop(self) -> None:
         if self._desktop_route is None or self._desktop_transfer is not None:
@@ -446,6 +476,7 @@ class Overlay(QGraphicsView):
         self._start_desktop_detach()
 
     def _start_desktop_detach(self) -> None:
+        self._desktop_reverse_pending = False
         route = self._desktop_route
         start = route.pose()
         area = route.track.area
@@ -458,40 +489,49 @@ class Overlay(QGraphicsView):
         end = DesktopPose(center, angle, start.facing, start.edge)
         self._desktop_transfer = _EdgeTransfer(start, end, attaching=False)
 
-    def _discard_desktop(self, screen: QScreen | None = None, *, facing: int | None = None) -> None:
+    def _discard_desktop(self, screen: QScreen | None = None, *, facing: int | None = None,
+                         grabbed: bool = False) -> None:
         self._desktop_route = None
         self._desktop_transfer = None
         self._desktop_screen = None
         self._desktop_geometry = None
+        self._desktop_reverse_pending = False
         self._puppet.set_desktop_contact(None)
         if screen is not None:
-            self._place(self.pos(), screen)
+            previous = self.pos()
+            self._place(previous, screen)
+            if grabbed:
+                offset = QPointF(previous - self.pos()) / self.transform().m11()
+                self._puppet.level_after_release(offset)
         if facing is None:
             facing = 1 if self._velocity > 0 else -1
         self._velocity = copysign(abs(self._velocity), facing)
         self._puppet.stand(immediate=True)
         self._puppet.walk(0, facing)
 
-    def _paint_desktop_pose(self, pose: DesktopPose, distance: float, strength: float) -> None:
+    def _paint_desktop_pose(self, pose: DesktopPose, distance: float, strength: float,
+                            elapsed: float) -> None:
         # The window has transparent padding. Only the artwork approaches the wall.
         position = (pose.center - QPointF(self.width() / 2, self.height() / 2)).toPoint()
-        self.move(position)
+        if position != self.pos():
+            self.move(position)
         self._x, self._y = float(position.x()), float(position.y())
         scale = self.transform().m11()
         area = self._desktop_route.track.area
         center = self._center()
         self._puppet.set_desktop_contact(SurfaceContact.from_area(area, center, scale, strength))
-        self._puppet.walk(distance / scale, pose.facing, pose.angle)
+        self._puppet.walk(distance / scale, pose.facing, pose.angle, elapsed=elapsed)
 
     def _step_desktop(self, screen: QScreen, distance: float, elapsed: float) -> None:
-        if not self._desktop_matches(screen):
+        # Geometry/DPI changes invalidate via _keep_visible; only check screen identity here.
+        if screen is not self._desktop_screen:
             self._discard_desktop(screen)
             return
         transfer = self._desktop_transfer
         route = self._desktop_route
         if transfer is None:
             route.advance(distance)
-            self._paint_desktop_pose(route.pose(), distance, 1.0)
+            self._paint_desktop_pose(route.pose(), distance, 1.0, elapsed)
             if route.finished:
                 self._start_desktop_detach()
             return
@@ -505,7 +545,7 @@ class Overlay(QGraphicsView):
         center = start.center + (end.center - start.center) * position_progress
         strength = progress if transfer.attaching else 1 - progress
         pose = DesktopPose(center, angle, end.facing, end.edge)
-        self._paint_desktop_pose(pose, distance * (0.6 + 0.4 * progress), strength)
+        self._paint_desktop_pose(pose, distance * (0.6 + 0.4 * progress), strength, elapsed)
         if progress == 1:
             self._desktop_transfer = None
             if not transfer.attaching:
@@ -526,13 +566,18 @@ class Overlay(QGraphicsView):
             self._behavior_timer.stop()
 
         walking = active and self._behavior.activity is Activity.WANDERING
-        if walking and not self._timer.isActive():
-            self._last_tick = perf_counter()
-            self._speed_scale = 0.0
-            self._timer.start()
-        elif not walking:
+        self._braking = (active and not walking and self._desktop_transfer is None
+                         and self._timer.isActive() and self._speed_scale > 0)
+        if walking or self._braking:
+            if not self._timer.isActive():
+                self._last_tick = perf_counter()
+                self._timer.start()
+        else:
             self._timer.stop()
+            self._speed_scale = 0.0
             self._puppet.stand(immediate=self._press is not None or not self.isVisible())
+        if walking or not active:
+            self._puppet.settle_idle()
 
     def _advance_behavior(self) -> None:
         now = perf_counter()
@@ -559,6 +604,8 @@ class Overlay(QGraphicsView):
             gaze = (round(offset.x() * scale), round(offset.y() * scale))
         self._show_activity(gaze)
         self._sync_timers()
+        if self._behavior.idle_shift_ready(elapsed, stationary=not self._timer.isActive()):
+            self._puppet.idle_shift()
 
     def _step(self) -> None:
         now = perf_counter()
@@ -571,30 +618,42 @@ class Overlay(QGraphicsView):
             return
         climbing = self._route is not None and self._route.edge in (Edge.SIDE, Edge.CORNER)
         desktop = self._desktop_route is not None
-        target_scale = 0.72 if climbing or desktop else 1.0
+        if self._braking and not self._speed_scale:
+            self._sync_timers()
+            return
+        if desktop and self._desktop_reverse_pending and self._speed_scale <= 1e-6:
+            self._desktop_reverse_pending = False
+            self._desktop_route.direction *= -1
+            pose = self._desktop_route.pose()
+            self._puppet.walk(0, pose.facing, pose.angle)
+        idle = self._braking or self._desktop_reverse_pending
+        target_scale = 0.0 if idle else (0.72 if climbing or desktop else 1.0)
+        if desktop and not idle and self._desktop_transfer is None:
+            route = self._desktop_route
+            remaining = route.track.length - route.distance if route.direction > 0 else route.distance
+            target_scale = 0.34 + 0.38 * smooth(remaining / (28 * self.transform().m11()))
         if not desktop:
             self._desktop_cooldown = max(0.0, self._desktop_cooldown - elapsed)
-        change = elapsed / 0.18
-        previous_scale = self._speed_scale
-        self._speed_scale += min(change, max(-change, target_scale - self._speed_scale))
-        moving_time = elapsed * (previous_scale + self._speed_scale) / 2
+        # Automatic stops coast only a few logical pixels. Input still stops immediately.
+        duration = min(0.115, 13 / max(1, abs(self._velocity))) if self._braking else 0.18
+        self._speed_scale, moving_time = ramp_speed(self._speed_scale, target_scale, elapsed, duration)
         distance = abs(self._velocity) * moving_time
         if self._preferences.birdseye:
             self._step_overhead(screen, moving_time, elapsed)
             return
         if self._route is not None:
             self._route.advance(distance)
-            self._place_on_window(screen, distance)
+            self._place_on_window(screen, distance, elapsed)
             return
         if desktop:
             self._step_desktop(screen, distance, elapsed)
             return
-        if distance and self._try_window(distance):
+        if distance and not self._braking and self._try_window(distance):
             return
 
         area = screen.availableGeometry()
         right = area.x() + max(0, area.width() - self.width())
-        if distance and not self._desktop_cooldown:
+        if distance and not self._braking and not self._desktop_cooldown:
             side = 1 if self._velocity > 0 else -1
             wall = right if side > 0 else area.x()
             if 0 <= (wall - self._x) * side <= max(distance, 8):
@@ -607,7 +666,7 @@ class Overlay(QGraphicsView):
         )
         if right > area.x():
             direction = 1 if self._velocity > 0 else -1
-            self._puppet.walk(distance, direction)
+            self._puppet.walk(distance / self.transform().m11(), direction, elapsed=elapsed)
         else:
             self._puppet.stand()
         x = round(self._x)
@@ -636,11 +695,11 @@ class Overlay(QGraphicsView):
         distance = hypot(vx, vy) * moving_time
         if distance:
             self._heading = atan2(vy, vx)
-            delta = (degrees(self._heading) - self._puppet.angle + 180) % 360 - 180
+            delta = angle_delta(self._puppet.angle, degrees(self._heading))
             limit = elapsed * 420
             turn = delta * min(1.0, 9 * elapsed)
             angle = self._puppet.angle + min(limit, max(-limit, turn))
-            self._puppet.walk(distance, 1, angle)
+            self._puppet.walk(distance / self.transform().m11(), 1, angle, elapsed=elapsed)
         else:
             self._puppet.stand()
 
@@ -708,7 +767,7 @@ class Overlay(QGraphicsView):
             self._dragging = True
             self._leave_window()
             if self._desktop_route is not None:
-                self._discard_desktop(self._current_screen())
+                self._discard_desktop(self._current_screen(), grabbed=True)
             self._drag_position = QPointF(self.pos())
             self._last_drag_tick = perf_counter()
             self._puppet.set_held(True)

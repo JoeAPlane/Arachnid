@@ -7,7 +7,8 @@ STRIDE = 28.0
 CYCLE_DISTANCE = STRIDE / STANCE
 
 
-def foot_at(phase: float, rest_x: float, floor: float, blend: float) -> tuple[float, float]:
+def foot_at(phase: float, rest_x: float, floor: float, blend: float,
+            *, stride: float | None = None) -> tuple[float, float]:
     """Sweep back at walking speed on the ground and lift on the return."""
     phase %= 1
     if phase < STANCE:
@@ -20,7 +21,7 @@ def foot_at(phase: float, rest_x: float, floor: float, blend: float) -> tuple[fl
         tangent = -(1 - STANCE) / STANCE
         offset = STRIDE * (progress - 0.5 + tangent * swing * (1 - swing) * (1 - 2 * swing))
         lift = 11 * sin(pi * swing) ** 2
-    return rest_x + offset * blend, floor - lift * blend
+    return rest_x + offset * (blend if stride is None else stride), floor - lift * blend
 
 
 def knee_at(
@@ -33,6 +34,8 @@ def knee_at(
     """Find the joint of a two-link leg on the chosen side of the hip-foot line."""
     dx, dy = foot[0] - hip[0], foot[1] - hip[1]
     distance = hypot(dx, dy)
+    if distance < 1e-6:
+        return hip[0], hip[1] - upper * bend
     along = (upper**2 - lower**2 + distance**2) / (2 * distance)
     height = sqrt(max(0, upper**2 - along**2)) * bend
     return (

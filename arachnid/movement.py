@@ -1,6 +1,6 @@
 """Work-area geometry and movement in Qt logical pixels."""
 
-from math import exp, hypot
+from math import copysign, exp, hypot
 
 
 def weighted_offset(dx: float, dy: float, elapsed: float) -> tuple[float, float]:
@@ -34,3 +34,16 @@ def advance(
     if phase < width:
         return left + phase, abs(velocity)
     return right - (phase - width), -abs(velocity)
+
+
+def angle_delta(current: float, target: float) -> float:
+    return (target - current + 180) % 360 - 180
+
+
+def ramp_speed(speed: float, target: float, elapsed: float, duration: float) -> tuple[float, float]:
+    """Return the new speed fraction and the integrated moving time."""
+    difference = target - speed
+    ramp_time = min(elapsed, abs(difference) * duration)
+    end = speed + copysign(ramp_time / duration, difference)
+    moving_time = (speed + end) * ramp_time / 2 + end * (elapsed - ramp_time)
+    return (target if ramp_time < elapsed else end), moving_time

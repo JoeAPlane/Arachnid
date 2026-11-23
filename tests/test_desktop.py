@@ -281,7 +281,7 @@ def test_native_input_and_window_awareness(tmp_path, caplog):
             overlay._pause_action.trigger()
             wait_for(lambda: overlay._behavior.activity is Activity.OBSERVING)
             assert overlay._puppet._gaze[0] < 0
-            assert not overlay._timer.isActive()
+            wait_for(lambda: not overlay._timer.isActive(), duration_ms=400)
             physical_move(point_on(overlay, local_center - QPoint(260, 0)))
             wait_for(lambda: overlay._behavior.activity is Activity.WANDERING)
             assert overlay._timer.isActive()
@@ -423,7 +423,7 @@ def test_native_navigation_and_foreground_fullscreen(monkeypatch, tmp_path):
             place_at(QPoint(round(surface.left() - FOOT_CONTACT - 3), round(surface.top() + 70)))
             overlay._pause_action.trigger()
             wait_for(lambda: overlay._route and overlay._route.edge is Edge.SIDE)
-            assert overlay._puppet.angle == -90
+            wait_for(lambda: overlay._puppet.angle == -90, duration_ms=500)
             wait_for(lambda: overlay._route and overlay._route.edge is Edge.CORNER)
             wait_for(lambda: overlay._route and overlay._route.edge is Edge.TOP)
             assert overlay._puppet.angle == 0

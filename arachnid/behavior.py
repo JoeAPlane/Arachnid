@@ -25,6 +25,7 @@ class Behavior:
         self.activity = Activity.WANDERING
         self.remaining = self._random.uniform(3.5, 6.5)
         self._observe_cooldown = 0.0
+        self._idle_cooldown = 7.0
 
     def react_to_click(self) -> None:
         if self.activity is Activity.SLEEPING:
@@ -67,6 +68,14 @@ class Behavior:
                 self._observe_cooldown = 2.0
             return self._start_walking()
         return False
+
+    def idle_shift_ready(self, elapsed: float, *, stationary: bool = True) -> bool:
+        self._idle_cooldown = max(0, self._idle_cooldown - elapsed)
+        if (self._idle_cooldown or not stationary
+                or self.activity not in (Activity.OBSERVING, Activity.RESTING)):
+            return False
+        self._idle_cooldown = 12.0
+        return True
 
     def _start_walking(self) -> bool:
         self.activity = Activity.WANDERING

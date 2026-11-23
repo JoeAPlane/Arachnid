@@ -139,6 +139,9 @@ def test_overlay_approach_plants_feet_and_traversal_uses_gait(pet, side):
     pet._step_desktop(screen, 19, 0.2)
     assert pet.y() < y and pet._puppet.phase != phase
     pet._reverse_desktop()
+    assert pet._desktop_reverse_pending
+    pet._last_tick = perf_counter() - 0.016
+    pet._step()
     pet._step_desktop(screen, 8, 0.1)
     assert pet.y() > y - 19
     pet._detach_desktop()
@@ -181,6 +184,11 @@ def test_drag_cancels_desktop_route_and_returns_inside_work_area(pet):
     ))
     assert pet._dragging
     assert pet._desktop_route is None and pet._puppet._desktop_contact is None
+    initial_angle = abs(pet._puppet.angle)
+    assert initial_angle == 90
+    pet._puppet._level.setCurrentTime(95)
+    assert 0 < abs(pet._puppet.angle) < initial_angle
+    pet._puppet._level.setCurrentTime(190)
     assert pet._puppet.angle == 0
     QTest.mouseRelease(view, Qt.MouseButton.LeftButton, pos=moved)
     assert screen.availableGeometry().contains(pet.frameGeometry())

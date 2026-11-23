@@ -1,6 +1,6 @@
 """Draw and animate the articulated ARACHNID character."""
 
-from math import cos, pi, radians, sin
+from math import cos, exp, pi, radians, sin
 
 from PySide6.QtCore import QAbstractAnimation, QEasingCurve, QPointF, QRectF, Qt, Signal, QVariantAnimation
 from PySide6.QtGui import QColor, QLinearGradient, QPainterPath, QPen
@@ -10,6 +10,7 @@ from .appearance import DEFAULT_FINISH, FINISHES
 from .behavior import Activity
 from .desktop_edges import SurfaceContact
 from .gait import CYCLE_DISTANCE, foot_at, knee_at
+from .movement import angle_delta
 from .navigation import FOOT_CONTACT
 
 type Point = tuple[float, float]
@@ -122,6 +123,7 @@ class MechanicalPuppet(QGraphicsObject):
         self.angle = 0.0
         self.phase = 0.0
         self.blend = 0.0
+        self._stride_blend = 0.0
         self._hovered = False
         self._pet_progress = 1.0
         self._intro_progress = 1.0
@@ -130,6 +132,12 @@ class MechanicalPuppet(QGraphicsObject):
         self._activity = Activity.WANDERING
         self._waking = False
         self._gaze = (0, 0)
+        self._visual_gaze = QPointF()
+        self._tail_lag = 0.0
+        self._recent_speed = 0.0
+        self._idle_amount = 0.0
+        self._level_from = 0.0
+        self._level_offset = QPointF()
         self._posture = 0.0
         self._target_posture = 0.0
         self._turn_from = 1
@@ -141,7 +149,14 @@ class MechanicalPuppet(QGraphicsObject):
         self._carry_from = 0.0
         self._drag_tilt = 0.0
         self._carry_progress = 1.0
-        self._settling = self._animation(160, self._set_blend)
+        self._settling = self._animation(185, self._set_blend)
+        self._tail_settling = self._animation(260, self._set_tail_lag)
+        self._tail_settling.setEndValue(0.0)
+        self._look = self._animation(155, self._set_visual_gaze)
+        self._idle = self._animation(900, self._set_idle_amount)
+        self._level = self._animation(190, self._set_level)
+        self._level.setStartValue(0.0)
+        self._level.setEndValue(1.0)
         self._posture_transition = self._animation(220, self._set_posture)
         self._turning = self._animation(180, self._set_turn_progress)
         self._pulse = self._animation(300, self._set_light_pulse)
@@ -176,9 +191,46 @@ class MechanicalPuppet(QGraphicsObject):
 
     def _set_blend(self, value: float) -> None:
         self.blend = value
-        if value == 0:
-            self.phase = 0.0
         self.update()
+
+    def _set_visual_gaze(self, value: QPointF) -> None:
+        self._visual_gaze = value
+        self.update()
+
+    def _set_tail_lag(self, value: float) -> None:
+        self._tail_lag = value
+        self.update()
+
+    def _set_idle_amount(self, value: float) -> None:
+        self._idle_amount = value
+        self.update()
+
+    def idle_shift(self) -> None:
+        if self._idle.state() == QAbstractAnimation.State.Stopped and not self._held:
+            self._idle.setDuration(900)
+            self._idle.setKeyValues([(0.0, 0.0), (0.52, 1.0), (1.0, 0.0)])
+            self._idle.start()
+
+    def settle_idle(self) -> None:
+        if self._idle.state() == QAbstractAnimation.State.Running and self._idle.duration() != 115:
+            self._idle.stop()
+            self._idle.setDuration(115)
+            self._idle.setKeyValues([(0.0, self._idle_amount), (1.0, 0.0)])
+            self._idle.start()
+
+    def _set_level(self, progress: float) -> None:
+        shift = self._level_offset * max(0.0, 1 - progress * 1.65)
+        self.setPos(self.WIDTH / 2 + shift.x(), self.HEIGHT / 2 + shift.y())
+        self.angle = self._level_from * min(1.0, (1 - progress) / 0.82)
+        self.update()
+
+    def level_after_release(self, offset: QPointF | None = None) -> None:
+        self._level_from = angle_delta(0, self.angle)
+        self._level_offset = offset if offset is not None else QPointF()
+        if self._level_from or not self._level_offset.isNull():
+            self._level.stop()
+            self._set_level(0.0)
+            self._level.start()
 
     def _set_posture(self, value: float) -> None:
         self._posture = value
@@ -296,11 +348,22 @@ class MechanicalPuppet(QGraphicsObject):
             self._posture_transition.start()
         if (activity, gaze) != (self._activity, self._gaze):
             self._activity = activity
-            self._gaze = gaze
+            if gaze != self._gaze:
+                self._gaze = gaze
+                self._look.stop()
+                self._look.setStartValue(self._visual_gaze)
+                self._look.setEndValue(QPointF(*gaze))
+                self._look.start()
             self._update_curl()
             self.update()
 
-    def walk(self, distance: float, direction: int, angle: float = 0) -> None:
+    def walk(self, distance: float, direction: int, angle: float | None = None,
+             *, elapsed: float = 0.016) -> None:
+        if angle is None:
+            angle = self.angle if self._level.state() == QAbstractAnimation.State.Running else 0.0
+        elif self._level.state() == QAbstractAnimation.State.Running:
+            self._level.stop()
+            self.setPos(self.WIDTH / 2, self.HEIGHT / 2)
         if not distance and direction == self.facing and angle == self.angle:
             return
         if direction != self.facing:
@@ -314,9 +377,20 @@ class MechanicalPuppet(QGraphicsObject):
                 self._set_turn_progress(1.0)
         if distance:
             self._settling.stop()
+            self._tail_settling.stop()
+            self.settle_idle()
+        if elapsed > 0:
+            speed = distance / elapsed
+            turn_rate = angle_delta(self.angle, angle) / elapsed
+            impulse = (speed - self._recent_speed) * 0.0012 - turn_rate * 0.00028
+            target = min(0.18, max(-0.18, impulse))
+            response = 1 - exp(-elapsed / 0.10)
+            self._tail_lag += (target - self._tail_lag) * response
+            self._recent_speed = speed
         self.angle = angle
         self.phase = (self.phase + distance / CYCLE_DISTANCE) % 1
-        self.blend = min(1.0, self.blend + distance / 14)
+        self._stride_blend = min(1.0, self._stride_blend + distance / 12)
+        self.blend = min(1.0, self.blend + distance / 12)
         self.update()
 
     def stand(self, *, immediate: bool = False) -> None:
@@ -327,11 +401,23 @@ class MechanicalPuppet(QGraphicsObject):
         elif self.blend and self._settling.state() == QAbstractAnimation.State.Stopped:
             self._settling.setStartValue(self.blend)
             self._settling.start()
+        if self._tail_lag and self._tail_settling.state() == QAbstractAnimation.State.Stopped:
+            self._recent_speed = 0
+            self._tail_settling.setStartValue(self._tail_lag)
+            self._tail_settling.start()
 
     def finish_animations(self) -> None:
         self.skip_intro()
         self.stand(immediate=True)
         self._turning.stop()
+        self._tail_settling.stop()
+        self._look.stop()
+        self._idle.stop()
+        if self._level.state() == QAbstractAnimation.State.Running:
+            self._level.stop()
+            self._set_level(1.0)
+        self._tail_lag = self._idle_amount = self._recent_speed = 0.0
+        self._visual_gaze = QPointF(*self._gaze)
         self._posture_transition.stop()
         self._pulse.stop()
         self._petting.stop()
@@ -420,6 +506,13 @@ class MechanicalPuppet(QGraphicsObject):
         else:
             self._paint_puppet(painter)
 
+    def _rest_shade(self) -> float:
+        # The optic follows the eased chassis posture during sleep and waking.
+        return max(0.0, min(1.0, (-self._posture - 1.5) / 5.5))
+
+    def _optic_opening(self) -> float:
+        return max(0.0, 1 - self._rest_shade() / 0.72)
+
     def _paint_puppet(self, painter) -> None:
         painter.save()
         affection = sin(pi * self._pet_progress) if self._pet_progress < 1 else 0.0
@@ -437,8 +530,8 @@ class MechanicalPuppet(QGraphicsObject):
             angle += self._drag_tilt * self._suspension() + 5 * wiggle
         painter.rotate(angle)
         accent = self._optic
-        if self._activity.resting:
-            accent = accent.darker(235 if self._activity is Activity.SLEEPING else 200)
+        if self._posture < -1.5:
+            accent = accent.darker(round(100 + 135 * self._rest_shade()))
         if self._birdseye:
             self._paint_overhead(painter, accent, wiggle)
             painter.restore()
@@ -446,7 +539,7 @@ class MechanicalPuppet(QGraphicsObject):
         drawn_facing = self._drawn_facing()
         turn_width = 1 - 0.42 * sin(pi * self._turn_progress)
         painter.scale(drawn_facing * turn_width, 1)
-        bob = self._posture + self.blend * (1 - cos(4 * pi * self.phase))
+        bob = self._posture + 0.66 * self.blend * (1 - cos(4 * pi * self.phase)) - self._idle_amount * 1.25
         bob += self._landing() - 6 * self._suspension() - 5 * affection - 7 * self._curl
         projection = None if contact is None else contact.leg_projector(angle, drawn_facing * turn_width)
         self._paint_legs(painter, far=True, bob=bob, wiggle=wiggle, projection=projection)
@@ -484,7 +577,7 @@ class MechanicalPuppet(QGraphicsObject):
             tripod = (index + int(far)) % 2
             phase = self.phase + 0.5 * tripod
             hip = (hip_x, hip_y - bob)
-            foot = foot_at(phase, foot_x, floor, self.blend)
+            foot = foot_at(phase, foot_x, floor, self.blend, stride=self._stride_blend)
             kick = (1 - 2 * tripod) * wiggle
             foot = (foot[0] * (1 - 0.16 * tuck) + 10 * kick, foot[1] + 5 * tuck + 6 * kick)
             curl = self._curl
@@ -530,7 +623,7 @@ class MechanicalPuppet(QGraphicsObject):
         )
         for index, (dx, dy) in enumerate(links):
             dx, dy = _between((dx, dy), curled_links[index], self._curl)
-            angle = droop + sway * index * 0.055
+            angle = droop + index * (sway * 0.045 + self._tail_lag * 0.28 + self._idle_amount * 0.018)
             end = (start[0] + dx * cos(angle) - dy * sin(angle),
                    start[1] + dx * sin(angle) + dy * cos(angle))
             _line(painter, start, end, 12 - index, _INK)
@@ -555,7 +648,7 @@ class MechanicalPuppet(QGraphicsObject):
             for index, (hip_x, foot_x, spread, bend) in enumerate(_TOP_LEGS):
                 tripod = (index + bank) % 2
                 hip = (hip_x, side * 14)
-                x, lift = foot_at(self.phase + tripod * 0.5, foot_x, 0.0, self.blend)
+                x, lift = foot_at(self.phase + tripod * 0.5, foot_x, 0.0, self.blend, stride=self._stride_blend)
                 kick = (1 - 2 * tripod) * wiggle
                 foot = (x * tuck + 8 * kick, side * (spread * tuck + lift * 0.65 + kick * 5))
                 knee = knee_at(hip, foot, 25, 33, side * bend)
@@ -595,14 +688,22 @@ class MechanicalPuppet(QGraphicsObject):
                 painter.rotate(-90)
                 _happy_eye(painter, 0, 0, 2.7, self._eye_closure(), accent)
                 painter.restore()
-            elif self._activity.resting:
+            elif self._optic_opening() == 0:
                 _line(painter, (38, eye[1] - 2), (38, eye[1] + 2), 1.2, accent)
             elif self._held:
                 _line(painter, (36, eye[1] - side * 2.6), (41, eye[1] + side * 2.6), 2, accent)
             else:
                 light = _WHITE if self._light_pulse > 0.45 or self._activity is Activity.REACTING else accent
-                _disc(painter, (39.5 + look_x, eye[1] + look_y), 3.15, light)
-                _disc(painter, (40.5 + look_x, eye[1] + look_y - 0.8), 1.1, _WHITE)
+                opening = self._optic_opening()
+                if opening == 1:
+                    _disc(painter, (39.5 + look_x, eye[1] + look_y), 3.15, light)
+                    _disc(painter, (40.5 + look_x, eye[1] + look_y - 0.8), 1.1, _WHITE)
+                else:
+                    painter.setPen(Qt.PenStyle.NoPen)
+                    painter.setBrush(light)
+                    painter.drawEllipse(QPointF(38 + (1.5 + look_x) * opening,
+                                                eye[1] + look_y * opening),
+                                        0.6 + 2.55 * opening, 2 + 1.15 * opening)
 
     def _paint_body(self, painter, accent: QColor, drawn_facing: int) -> None:
         if self._neon:
@@ -630,7 +731,7 @@ class MechanicalPuppet(QGraphicsObject):
             _line(painter, (x, 8), (x + 2, 8), 1.65, accent)
         _line(painter, (-11, 8), (10, 6), 1.05, _STEEL)
 
-        gx, gy = self._gaze
+        gx, gy = self._visual_gaze.x(), self._visual_gaze.y()
         painter.save()
         painter.translate(24, 0)
         painter.rotate(gy * 1.7)
@@ -652,7 +753,7 @@ class MechanicalPuppet(QGraphicsObject):
             painter.drawEllipse(QPointF(35, -2), radius, radius)
         if self._pet_progress < 1 and not self._held and self._activity is not Activity.SLEEPING:
             _happy_eye(painter, 35, -2, 3.8, self._eye_closure(), accent)
-        elif self._activity.resting:
+        elif self._optic_opening() == 0:
             _line(painter, (32, -1), (38, -1), 1.8, accent)
         elif self._held:
             _line(painter, (32, -3), (38, -1), 2.1, accent)
@@ -663,8 +764,16 @@ class MechanicalPuppet(QGraphicsObject):
         else:
             eye = (35 + gx * drawn_facing * 0.75, -2 + gy * 0.4)
             radius = 3.4 if self._activity is Activity.OBSERVING else 4.5
-            _disc(painter, eye, radius, accent)
-            _disc(painter, (eye[0] + 1, eye[1] - 1.5), 1.4, _WHITE)
+            opening = self._optic_opening()
+            if opening == 1:
+                _disc(painter, eye, radius, accent)
+                _disc(painter, (eye[0] + 1, eye[1] - 1.5), 1.4, _WHITE)
+            else:
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(accent)
+                painter.drawEllipse(QPointF(35 + (eye[0] - 35) * opening,
+                                            -1 + (eye[1] + 1) * opening),
+                                    3 + (radius - 3) * opening, 0.9 + (radius - 0.9) * opening)
         _disc(painter, (28, 4), 1.45, accent)
         painter.restore()
 
@@ -722,7 +831,7 @@ class MechanicalPuppet(QGraphicsObject):
             _line(painter, (-12, -2), (-4 + phase, -2), 1.5, accent)
             _line(painter, (0, 2), (12, 2), 1.25, _NEON_CABLE if phase % 2 else accent)
             _disc(painter, (9 - phase, -3.5), 1.05, _WHITE)
-        elif self._activity.resting:
+        elif self._optic_opening() == 0:
             _line(painter, (-3, 1), (3, 1), 1.35, accent)
         elif self._held:
             _line(painter, (-10, -2), (-4, 1), 1.8, accent)
@@ -732,6 +841,8 @@ class MechanicalPuppet(QGraphicsObject):
             light = _WHITE if self._light_pulse > 0.45 else accent
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(light)
+            opening = self._optic_opening()
+            painter.scale(1, 0.35 + 0.65 * opening)
             for segment in _NEON_VISOR_SEGMENTS:
                 painter.drawPath(segment)
         painter.restore()

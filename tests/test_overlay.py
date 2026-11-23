@@ -139,6 +139,7 @@ def test_observation_freezes_during_drag_and_manual_pause(app, overlay, monkeypa
     QTest.qWait(200)
     assert overlay._behavior.activity is Activity.OBSERVING
     assert overlay._puppet._gaze[0] > 0
+    QTest.qWait(150)  # Allow the brief autonomous brake to finish.
     assert not overlay._timer.isActive()
 
     viewport = overlay.viewport()

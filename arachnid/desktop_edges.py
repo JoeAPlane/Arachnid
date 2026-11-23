@@ -98,7 +98,7 @@ class DesktopTrack:
             phase = (d - self.wall_length) / self.radius
             x = self.contact + self.radius * (1 - cos(phase))
             y = self.high - self.radius * sin(phase)
-            angle = 90 + phase * 180 / pi
+            angle = 90 + 90 * smooth(phase / (pi / 2))
             edge = DesktopEdge.CORNER
         elif d <= ceiling_end:
             x = self.contact + self.radius + (d - first_turn_end)
@@ -109,7 +109,7 @@ class DesktopTrack:
             phase = (d - ceiling_end) / self.radius
             x = self.area.width() - self.contact - self.radius * (1 - sin(phase))
             y = self.high - self.radius * cos(phase)
-            angle = 180 + phase * 180 / pi
+            angle = 180 + 90 * smooth(phase / (pi / 2))
             edge = DesktopEdge.CORNER
         else:
             x = self.area.width() - self.contact

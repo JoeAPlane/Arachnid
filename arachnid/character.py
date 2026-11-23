@@ -1,5 +1,6 @@
 """Draw and animate the articulated ARACHNID character."""
 
+from dataclasses import dataclass
 from math import cos, exp, pi, radians, sin
 
 from PySide6.QtCore import QAbstractAnimation, QEasingCurve, QPointF, QRectF, Qt, Signal, QVariantAnimation
@@ -112,10 +113,21 @@ def _happy_eye(painter, x: float, y: float, width: float, close: float, accent: 
     painter.drawPath(eye)
 
 
+@dataclass(slots=True)
+class _ThrowPose:
+    tuck: float
+    compression: float
+    tail: float
+    foot_lift: float
+    leg_kick: float
+
+
 class MechanicalPuppet(QGraphicsObject):
     intro_finished = Signal()
     WIDTH = 176
     HEIGHT = 176
+    # The planted toes and compressed knees, including their outlines.
+    SIDE_LANDING_CLEARANCE = 48
 
     def __init__(self, finish: str = DEFAULT_FINISH) -> None:
         super().__init__()
@@ -146,6 +158,7 @@ class MechanicalPuppet(QGraphicsObject):
         self._birdseye = False
         self._desktop_contact: SurfaceContact | None = None
         self._held = False
+        self._throw_pose: _ThrowPose | None = None
         self._carry_from = 0.0
         self._drag_tilt = 0.0
         self._carry_progress = 1.0
@@ -258,7 +271,40 @@ class MechanicalPuppet(QGraphicsObject):
         self._set_carry_progress(0.0)
         self._carry_animation.start()
 
+    def begin_throw_pose(self) -> tuple[float, float, float]:
+        tuck = self._suspension()
+        kick = self._struggle()
+        angle = self.angle + self._drag_tilt * tuck + 5 * kick
+        self._carry_animation.stop()
+        self._level.stop()
+        self.setPos(self.WIDTH / 2, self.HEIGHT / 2)
+        self._held = False
+        self._carry_from = self._drag_tilt = 0.0
+        self._carry_progress = 1.0
+        self._throw_pose = _ThrowPose(tuck, 0.0, 0.0, 5 * tuck, kick)
+        self.angle = angle
+        self.update()
+        return angle, tuck, kick
+
+    def set_throw_pose(self, angle: float, tuck: float, compression: float, tail: float, *,
+                       foot_lift: float, leg_kick: float) -> None:
+        self.angle = angle
+        self._throw_pose.tuck = tuck
+        self._throw_pose.compression = compression
+        self._throw_pose.tail = tail
+        self._throw_pose.foot_lift = foot_lift
+        self._throw_pose.leg_kick = leg_kick
+        self.update()
+
+    def end_throw_pose(self) -> None:
+        self._throw_pose = None
+        if not self._birdseye:
+            self.level_after_release()
+        self.update()
+
     def _suspension(self) -> float:
+        if self._throw_pose is not None:
+            return self._throw_pose.tuck
         # The chassis sags first, then the legs start their short struggle.
         t = min(1.0, self._carry_progress * (4.5 if self._held else 2.3))
         return self._carry_from + (float(self._held) - self._carry_from) * t * t * (3 - 2 * t)
@@ -523,12 +569,16 @@ class MechanicalPuppet(QGraphicsObject):
             _disc(painter, (-3, y), 3.8, heart)
             _disc(painter, (3, y), 3.8, heart)
             painter.drawPath(_polygon((-6.5, y + 1), (6.5, y + 1), (0, y + 8)))
-        wiggle = self._struggle() + affection * 0.58 * sin(5 * pi * self._pet_progress)
+        wiggle = 0.0
+        if self._throw_pose is None:
+            wiggle = self._struggle() + affection * 0.58 * sin(5 * pi * self._pet_progress)
         contact = self._desktop_contact
         angle = self.angle
         if contact is None:
             angle += self._drag_tilt * self._suspension() + 5 * wiggle
         painter.rotate(angle)
+        if self._throw_pose is not None:
+            wiggle = self._throw_pose.leg_kick
         accent = self._optic
         if self._posture < -1.5:
             accent = accent.darker(round(100 + 135 * self._rest_shade()))
@@ -559,6 +609,8 @@ class MechanicalPuppet(QGraphicsObject):
         return strength * (1 - progress) * sin(progress * 7 * pi)
 
     def _landing(self) -> float:
+        if self._throw_pose is not None:
+            return -self._throw_pose.compression
         if self._held:
             return 0.0
         progress = self._carry_progress
@@ -572,6 +624,7 @@ class MechanicalPuppet(QGraphicsObject):
             floor += (FOOT_CONTACT - floor) * self._desktop_contact.strength
             wiggle *= 1 - self._desktop_contact.strength
         upper, lower = (25, 29) if far else (29, 35)
+        lift = 5 * tuck if self._throw_pose is None else self._throw_pose.foot_lift
         for index, ((hip_x, hip_y), foot_x, bend) in enumerate(legs):
             # Far-front, far-rear, and near-middle form one tripod.
             tripod = (index + int(far)) % 2
@@ -579,7 +632,7 @@ class MechanicalPuppet(QGraphicsObject):
             hip = (hip_x, hip_y - bob)
             foot = foot_at(phase, foot_x, floor, self.blend, stride=self._stride_blend)
             kick = (1 - 2 * tripod) * wiggle
-            foot = (foot[0] * (1 - 0.16 * tuck) + 10 * kick, foot[1] + 5 * tuck + 6 * kick)
+            foot = (foot[0] * (1 - 0.16 * tuck) + 10 * kick, foot[1] + lift + 6 * kick)
             curl = self._curl
             toe_tip = None
             if projection is not None:
@@ -621,9 +674,11 @@ class MechanicalPuppet(QGraphicsObject):
         curled_links = ((-9, -8), (3, -12), (13, -7), (14, -1), (11, 4)) if self._birdseye else (
             (-8, -9), (3, -13), (11, -8), (13, -1), (11, 5),
         )
+        impact = self._throw_pose.tail if self._throw_pose is not None else 0.0
+        follow = sway * 0.045 + self._tail_lag * 0.28 + self._idle_amount * 0.018 + impact
         for index, (dx, dy) in enumerate(links):
             dx, dy = _between((dx, dy), curled_links[index], self._curl)
-            angle = droop + index * (sway * 0.045 + self._tail_lag * 0.28 + self._idle_amount * 0.018)
+            angle = droop + index * follow
             end = (start[0] + dx * cos(angle) - dy * sin(angle),
                    start[1] + dx * sin(angle) + dy * cos(angle))
             _line(painter, start, end, 12 - index, _INK)

@@ -30,6 +30,7 @@ class Preferences:
     birdseye: bool = False
     size: int = 100
     curled_sleep: bool = False
+    throwing: bool = True
 
     @classmethod
     def load(cls, store: QSettings) -> "Preferences":
@@ -41,6 +42,7 @@ class Preferences:
             store.value("appearance/birdseye", False, type=bool),
             min(150, max(70, store.value("appearance/size", 100, type=int))),
             store.value("appearance/curled_sleep", False, type=bool),
+            store.value("interaction/throwing", True, type=bool),
         )
 
     def save(self, store: QSettings) -> bool:
@@ -50,6 +52,7 @@ class Preferences:
         store.setValue("appearance/birdseye", self.birdseye)
         store.setValue("appearance/size", self.size)
         store.setValue("appearance/curled_sleep", self.curled_sleep)
+        store.setValue("interaction/throwing", self.throwing)
         store.sync()
         return store.status() == QSettings.Status.NoError
 
@@ -141,6 +144,11 @@ class SettingsDialog(QDialog):
         self._curled_sleep.setChecked(preferences.curled_sleep)
         layout.addWidget(self._curled_sleep)
 
+        self._throwing = QCheckBox("Enable &Throwing", self)
+        self._throwing.setToolTip("Release during a quick flick to throw Arachnid. Slow drops stay gentle.")
+        self._throwing.setChecked(preferences.throwing)
+        layout.addWidget(self._throwing)
+
         self._error = QLabel(self)
         self._error.setObjectName("settingsError")
         self._error.setWordWrap(True)
@@ -160,6 +168,7 @@ class SettingsDialog(QDialog):
             self._birdseye.isChecked(),
             self._size.value(),
             self._curled_sleep.isChecked(),
+            self._throwing.isChecked(),
         )
         if not preferences.save(self._store):
             self._error.setText("Windows could not save your Arachnid preferences.")

@@ -38,6 +38,21 @@ Enable **Curl up while sleeping** in Settings to tuck the legs and wrap the tail
 
 Use the **Size** slider to preview sizes from 70% to 150%. **Save** applies your chosen size on the desktop.
 
+## Preview throwing in the 1.1.0 development build
+
+Hold the left button over Arachnid and move it normally to pick it up.
+Release while flicking quickly to throw it, or slow down before releasing
+for a normal drop. You can grab it again during flight. After landing, it
+settles and returns to roaming unless you paused autonomous movement.
+In **Settings**, turn off **Enable Throwing** to use normal drops every time.
+The choice is saved with the rest of your preferences.
+
+The throw can bounce gently off the current display's work-area boundaries.
+Application windows remain climbable after recovery. Arachnid keeps a short
+cursor history in memory only during a grab and clears it when the grab ends.
+
+## View and finish options
+
 Enable **Bird’s-eye view** in Settings to see the robot from above and let it walk in any direction across the current display. The default side view keeps window climbing and perching available.
 
 Choose **Blackout Red** for charcoal armor with red optics or **Industrial Yellow** for weathered yellow plating, exposed wiring, and a segmented cyan visor.

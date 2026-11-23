@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from ctypes import wintypes
 from dataclasses import dataclass
-from math import atan2, copysign, cos, degrees, hypot, radians, sin
+from math import atan2, copysign, cos, degrees, hypot, pi, radians, sin
 from pathlib import Path
 from random import choice
 from time import perf_counter
@@ -30,6 +30,7 @@ from .feedback import play_click
 from .movement import advance, angle_delta, clamp_origin, ramp_speed, weighted_offset
 from .navigation import Edge, WindowRoute
 from .settings import Preferences, SettingsDialog
+from .throwing import CursorHistory, MAX_RELEASE_SPEED, ThrowBounds, ThrowMotion
 
 if TYPE_CHECKING:
     from .windows import ForegroundWindow
@@ -119,6 +120,9 @@ class Overlay(QGraphicsView):
         self._drag_cursor: QPoint | None = None
         self._drag_position = QPointF()
         self._last_drag_tick = 0.0
+        self._drag_floor_extension = 0
+        self._cursor_history = CursorHistory()
+        self._throw: ThrowMotion | None = None
 
         self._menu = QMenu(self)
         self._pause_action = self._menu.addAction("Resume" if paused else "Pause")
@@ -182,6 +186,7 @@ class Overlay(QGraphicsView):
         self._sync_timers()
 
     def hideEvent(self, event) -> None:
+        self._cancel_throw()
         self._end_press()
         self._puppet.finish_animations()
         super().hideEvent(event)
@@ -273,10 +278,10 @@ class Overlay(QGraphicsView):
 
         return min(QGuiApplication.screens(), key=proximity, default=primary)
 
-    def _place(self, position: QPoint, screen: QScreen) -> None:
+    def _place(self, position: QPoint, screen: QScreen, *, floor_extension: int = 0) -> None:
         area = screen.availableGeometry()
         x = clamp_origin(position.x(), area.x(), area.width(), self.width())
-        y = clamp_origin(position.y(), area.y(), area.height(), self.height())
+        y = clamp_origin(position.y(), area.y(), area.height(), self.height() - floor_extension)
         self.move(x, y)
         self._x = float(x)
         self._y = float(y)
@@ -286,6 +291,14 @@ class Overlay(QGraphicsView):
         if grab_point is not None and QGuiApplication.screenAt(grab_point) is None:
             self._end_press()
         screen = self._current_screen()
+        if self._throw is not None:
+            bounds = self._throw_bounds(screen) if screen is not None else None
+            if bounds is not None:
+                self._throw.resize(bounds)
+                self._move_throw()
+                self._sync_timers()
+                return
+            self._cancel_throw()
         if self._desktop_route is not None:
             if self._desktop_matches(screen):
                 self._sync_timers()
@@ -356,7 +369,7 @@ class Overlay(QGraphicsView):
         )
 
     def _try_window(self, travel: float = 0) -> bool:
-        if self._preferences.birdseye or self._desktop_route is not None:
+        if self._throw is not None or self._preferences.birdseye or self._desktop_route is not None:
             return False
         screen = self._current_screen()
         if screen is None:
@@ -451,7 +464,7 @@ class Overlay(QGraphicsView):
 
     def _preview_edge(self, side: int, *, near_top: bool = False) -> None:
         screen = self._current_screen()
-        if screen is None or self._puppet.entering or not self.isVisible():
+        if screen is None or self._throw is not None or self._puppet.entering or not self.isVisible():
             return
         track = self._desktop_track(screen, side)
         if track is None:
@@ -554,6 +567,15 @@ class Overlay(QGraphicsView):
                 self._discard_desktop(screen, facing=facing)
 
     def _sync_timers(self) -> None:
+        if self._throw is not None:
+            self._behavior_timer.stop()
+            if self.isVisible() and not self._menu_open:
+                if not self._timer.isActive():
+                    self._last_tick = perf_counter()
+                    self._timer.start()
+            else:
+                self._timer.stop()
+            return
         active = self.isVisible() and QGuiApplication.primaryScreen() is not None and not (
             self.fullscreen_suppressed or self._paused or self._press is not None or self._menu_open
             or self._settings_dialog is not None or self._behavior.activity is Activity.SLEEPING
@@ -609,9 +631,13 @@ class Overlay(QGraphicsView):
 
     def _step(self) -> None:
         now = perf_counter()
-        # Discard long pauses caused by a suspended or busy desktop.
-        elapsed = min(now - self._last_tick, 0.05)
+        elapsed = now - self._last_tick
         self._last_tick = now
+        if self._throw is not None:
+            self._step_throw(elapsed)
+            return
+        # Discard long pauses caused by a suspended or busy desktop.
+        elapsed = min(elapsed, 0.05)
         screen = self._current_screen()
         if screen is None:
             self._sync_timers()
@@ -671,6 +697,10 @@ class Overlay(QGraphicsView):
             self._puppet.stand()
         x = round(self._x)
         y = clamp_origin(self.y(), area.y(), area.height(), self.height())
+        if self._y > y:
+            # A throw can settle with the toes at the work-area boundary
+            # while the transparent bottom of the overlay extends past it.
+            y = clamp_origin(self.y(), area.y(), area.height(), self.height() - self._floor_extension())
         if (x, y) != (self.x(), self.y()):
             self.move(x, y)
         self._y = float(y)
@@ -707,11 +737,13 @@ class Overlay(QGraphicsView):
         self._puppet.set_appearance(self._hovered)
 
     def _end_press(self) -> None:
+        self._cursor_history.clear()
         self._capture_lost.stop()
         self._drag_timer.stop()
         self._drag_cursor = None
         self._press = None
         self._dragging = False
+        self._drag_floor_extension = 0
         self._puppet.set_held(False)
         self.viewport().setCursor(Qt.CursorShape.OpenHandCursor)
         self._sync_timers()
@@ -740,7 +772,10 @@ class Overlay(QGraphicsView):
     def mousePressEvent(self, event) -> None:
         self._puppet.skip_intro()
         if event.button() == Qt.MouseButton.LeftButton:
+            self._cancel_throw()
             self._press = event.globalPosition().toPoint()
+            self._cursor_history.clear()
+            self._sample_cursor(event)
             self._drag_offset = event.position().toPoint()
             self._sync_timers()
             event.accept()
@@ -761,6 +796,7 @@ class Overlay(QGraphicsView):
             self._end_press()
             return
 
+        self._sample_cursor(event)
         cursor = event.globalPosition().toPoint()
         distance = (cursor - self._press).manhattanLength()
         if not self._dragging and distance >= QApplication.startDragDistance():
@@ -768,6 +804,11 @@ class Overlay(QGraphicsView):
             self._leave_window()
             if self._desktop_route is not None:
                 self._discard_desktop(self._current_screen(), grabbed=True)
+            screen = self._current_screen()
+            if screen is not None:
+                area = screen.availableGeometry()
+                if self.y() > area.y() + area.height() - self.height():
+                    self._drag_floor_extension = self._floor_extension()
             self._drag_position = QPointF(self.pos())
             self._last_drag_tick = perf_counter()
             self._puppet.set_held(True)
@@ -780,9 +821,13 @@ class Overlay(QGraphicsView):
     def mouseReleaseEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton and self._press is not None:
             if self._dragging:
-                self._drag_cursor = event.globalPosition().toPoint()
-                self._drag_step(drop=True)
-                self._try_window()
+                self._sample_cursor(event)
+                velocity = (self._cursor_history.release() if self._preferences.throwing
+                            and self._behavior.activity is not Activity.SLEEPING else None)
+                if velocity is None or not self._start_throw(*velocity):
+                    self._drag_cursor = event.globalPosition().toPoint()
+                    self._drag_step(drop=True)
+                    self._try_window()
             elif self._behavior.activity is not Activity.SLEEPING:
                 self._puppet.pet()
                 if self._preferences.effects:
@@ -797,6 +842,90 @@ class Overlay(QGraphicsView):
         else:
             super().mouseReleaseEvent(event)
 
+    def _sample_cursor(self, event) -> None:
+        if self._preferences.throwing:
+            point = event.globalPosition()
+            # Qt timestamps preserve the spacing of native events queued
+            # during a busy frame. Synthetic events may have no timestamp.
+            timestamp = event.timestamp()
+            self._cursor_history.add(timestamp / 1000 if timestamp else perf_counter(), point.x(), point.y())
+
+    def _landing_clearance(self) -> float:
+        if self._preferences.birdseye:
+            return self.height() / 2
+        return self._puppet.SIDE_LANDING_CLEARANCE * self.transform().m11()
+
+    def _floor_extension(self) -> int:
+        return round(self.height() / 2 - self._landing_clearance())
+
+    def _throw_bounds(self, screen: QScreen) -> ThrowBounds | None:
+        area = QRectF(screen.availableGeometry())
+        half_width = self.width() / 2
+        half_height = self.height() / 2
+        if area.width() < self.width() or area.height() < self.height():
+            return None
+        # Keep the envelope swept by the six legs and tail inside the
+        # work area. Only transparent overlay padding can cross a boundary.
+        margin = min(half_width, 82 * self.transform().m11())
+        return ThrowBounds(area.left() + margin, area.top() + half_height,
+                           area.right() - margin, area.bottom() - half_height + self._floor_extension(),
+                           area.left() + half_width, area.right() - half_width)
+
+    def _start_throw(self, vx: float, vy: float) -> bool:
+        screen = self._current_screen()
+        bounds = self._throw_bounds(screen) if screen is not None else None
+        if (bounds is None or self.fullscreen_suppressed or not self.isVisible()
+                or self._route is not None or self._desktop_route is not None):
+            return False
+        scale = self.transform().m11()
+        pivot = QPointF(self.pos()) + self._puppet.pos() * scale
+        angle, tuck, kick = self._puppet.begin_throw_pose()
+        self._throw = ThrowMotion(pivot.x(), pivot.y(), vx, vy, bounds, angle, tuck, kick)
+        self._throw.contain()
+        self._move_throw()
+        return True
+
+    def _move_throw(self) -> None:
+        flight = self._throw
+        self._x = flight.x - self.width() / 2
+        self._y = flight.y - self.height() / 2
+        position = round(self._x), round(self._y)
+        if position != (self.x(), self.y()):
+            self.move(*position)
+
+    def _step_throw(self, elapsed: float) -> None:
+        flight = self._throw
+        finished = flight.advance(elapsed)
+        self._move_throw()
+        clearance = max(0.0, (flight.bounds.floor - flight.y) / self.transform().m11())
+        settle = smooth(flight.age / 0.16)
+        ready_to_land = smooth(clearance / 75)
+        lean = 13 * flight.vx / MAX_RELEASE_SPEED + 8 * flight.vy / MAX_RELEASE_SPEED
+        base_angle = flight.initial_angle if self._preferences.birdseye else 0.0
+        angle = base_angle + ((flight.initial_angle - base_angle) * (1 - settle) + lean * settle) * ready_to_land
+        tuck = (flight.initial_tuck * (1 - settle) + 0.68 * settle) * ready_to_land
+        impact = flight.impact_age
+        # Compression peaks first; the last tail segments catch up later.
+        compression = 0.0
+        if flight.impact and impact < 0.19:
+            compression = (2.0 + 6.0 * flight.impact) * sin(pi * impact / 0.19)
+        tail = flight.impact * 0.075 * sin(2 * pi * smooth((impact - 0.045) / 0.30))
+        self._puppet.set_throw_pose(angle, tuck, compression, tail,
+                                    foot_lift=(5 - 19 * settle) * tuck,
+                                    leg_kick=flight.initial_kick * (1 - settle) * ready_to_land)
+        if finished:
+            self._cancel_throw()
+            if self._behavior.activity is not Activity.SLEEPING:
+                self._behavior.wake()
+                self._show_activity()
+            self._desktop_cooldown = max(self._desktop_cooldown, 4.0)
+            self._sync_timers()
+
+    def _cancel_throw(self) -> None:
+        if self._throw is not None:
+            self._throw = None
+            self._puppet.end_throw_pose()
+
     def _drag_step(self, *, drop: bool = False) -> None:
         cursor = self._drag_cursor
         screen = (QGuiApplication.screenAt(cursor) or self._current_screen()) if cursor is not None else None
@@ -806,7 +935,8 @@ class Overlay(QGraphicsView):
         area = screen.availableGeometry()
         origin = cursor - self._drag_offset
         target = QPointF(clamp_origin(origin.x(), area.x(), area.width(), self.width()),
-                         clamp_origin(origin.y(), area.y(), area.height(), self.height()))
+                         clamp_origin(origin.y(), area.y(), area.height(),
+                                      self.height() - self._drag_floor_extension))
         now = perf_counter()
         gap = self._drag_position - target
         dx, dy = (0.0, 0.0) if drop else weighted_offset(
@@ -817,7 +947,7 @@ class Overlay(QGraphicsView):
         self._last_drag_tick = now
         self._drag_position = target + QPointF(dx, dy)
         rounded = self._drag_position.toPoint()
-        self._place(rounded, screen)
+        self._place(rounded, screen, floor_extension=self._drag_floor_extension)
         if self.pos() != rounded:
             self._drag_position = QPointF(self.pos())
         if not dx and not dy:
@@ -850,6 +980,7 @@ class Overlay(QGraphicsView):
             self._puppet.finish_animations()
 
     def _toggle_rest(self) -> None:
+        self._cancel_throw()
         if self._behavior.activity.resting:
             self._behavior.wake()
         else:
@@ -862,6 +993,7 @@ class Overlay(QGraphicsView):
     def _open_settings(self) -> None:
         if self._settings_dialog is not None or self.fullscreen_suppressed:
             return
+        self._cancel_throw()
         dialog = SettingsDialog(self._preferences, self._store, self)
         self._settings_dialog = dialog
         dialog.finished.connect(self._finish_settings)

@@ -245,7 +245,7 @@ def test_native_input_and_window_awareness(tmp_path, caplog):
                 wait_for(lambda: overlay.pos() != old_position)
             finally:
                 mouse(0x0004)  # MOUSEEVENTF_LEFTUP
-            assert not overlay._dragging
+            assert not overlay._dragging and overlay._throw is None
             assert overlay.pos() != old_position
 
             center = point_on(overlay, overlay.rect().center())
@@ -458,3 +458,48 @@ def test_native_navigation_and_foreground_fullscreen(monkeypatch, tmp_path):
         overlay.close()
         app.processEvents()
         set_cursor(saved_cursor.x, saved_cursor.y)
+
+
+def test_native_cursor_flick_starts_a_throw(tmp_path):
+    from arachnid.windows import _bind, _rect, _user32
+
+    get_cursor = _bind(_user32, "GetCursorPos", wintypes.BOOL, ctypes.POINTER(wintypes.POINT))
+    set_cursor = _bind(_user32, "SetCursorPos", wintypes.BOOL, ctypes.c_int, ctypes.c_int)
+    hit = _bind(_user32, "WindowFromPoint", wintypes.HWND, wintypes.POINT)
+    mouse = _bind(_user32, "mouse_event", None,
+                  wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, wintypes.WPARAM)
+    app = QApplication.instance() or QApplication([])
+    store = QSettings(str(tmp_path / "preferences.ini"), QSettings.Format.IniFormat)
+    pet = Overlay(110, True, store)
+    saved = wintypes.POINT()
+    assert get_cursor(ctypes.byref(saved))
+    try:
+        pet.show()
+        pet.raise_()
+        hwnd = int(pet.winId())
+        rect = wintypes.RECT()
+        assert _rect(hwnd, ctypes.byref(rect))
+        center = wintypes.POINT((rect.left + rect.right) // 2, (rect.top + rect.bottom) // 2)
+        wait_for(lambda: hit(center) == hwnd)
+        assert set_cursor(center.x, center.y)
+        actual = wintypes.POINT()
+        assert get_cursor(ctypes.byref(actual)) and hit(actual) == hwnd
+        scale = pet.devicePixelRatioF()
+        mouse(0x0002, 0, 0, 0, 0)
+        try:
+            wait_for(lambda: pet._press is not None)
+            for step in range(1, 6):
+                assert set_cursor(center.x + round(34 * step * scale),
+                                  center.y - round(6 * step * scale))
+                QTest.qWait(16)
+            assert pet._dragging
+        finally:
+            mouse(0x0004, 0, 0, 0, 0)
+        flight = wait_for(lambda: pet._throw, duration_ms=500)
+        assert flight.vx > 0 and flight.vy < 0
+        wait_for(lambda: pet._throw is None)
+        assert not pet._timer.isActive()
+    finally:
+        pet.close()
+        app.processEvents()
+        set_cursor(saved.x, saved.y)

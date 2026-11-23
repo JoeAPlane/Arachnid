@@ -380,7 +380,8 @@ def test_drop_uses_release_display_after_last_move(overlay, monkeypatch):
     right = SimpleNamespace(availableGeometry=lambda: QRect(0, 0, 1920, 1040))
     monkeypatch.setattr(QGuiApplication, "screenAt", lambda p: left if p.x() < 0 else right)
     placed = []
-    monkeypatch.setattr(overlay, "_place", lambda p, screen: placed.append((p, screen)))
+    monkeypatch.setattr(overlay, "_place",
+                        lambda p, screen, *, floor_extension: placed.append((p, screen, floor_extension)))
     overlay._press = QPoint(100, 280)
     overlay._dragging = True
     overlay._drag_offset = QPoint(30, 20)
@@ -388,7 +389,7 @@ def test_drop_uses_release_display_after_last_move(overlay, monkeypatch):
     release = QMouseEvent(QEvent.Type.MouseButtonRelease, QPointF(30, 20), QPointF(-800, 340),
                           Qt.MouseButton.LeftButton, Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier)
     overlay.mouseReleaseEvent(release)
-    assert placed == [(QPoint(-830, 320), left)]
+    assert placed == [(QPoint(-830, 320), left, 0)]
 
 
 def test_display_removal_ends_drag_on_disconnected_screen(overlay, monkeypatch):

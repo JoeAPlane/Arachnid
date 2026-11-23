@@ -3,7 +3,7 @@
 Arachnid is a free, open-source mechanical scorpion companion for Windows.
 The six-legged side-profile robot roams your desktop, follows the cursor,
 lets you pet it, climbs windows, and can rest or sleep. The tray controls and
-original finishes carry over from 1.0.0.
+finishes, including Industrial Yellow, carry over from 1.0.0.
 
 - **Desktop-edge climbing.** Arachnid occasionally climbs a clear side of the
   active screen, rounds an upper corner, and traverses the top upside down.
@@ -12,10 +12,6 @@ original finishes carry over from 1.0.0.
 - **Flick-to-throw.** Grab with the left button and release during a quick flick.
   Arachnid flies, absorbs the landing, and resumes roaming. Slow releases still
   put it down gently. Disable **Enable Throwing** in **Settings** if you prefer.
-
-**Safety Ochre** replaces Industrial Yellow. It uses the standard Arachnid
-chassis with an ochre enamel palette, grey-green linkages, and warm work lights.
-Existing Industrial Yellow selections open as Safety Ochre.
 
 ## Install
 

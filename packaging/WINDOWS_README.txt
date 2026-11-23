@@ -25,10 +25,10 @@ settings profile.
 On startup, Arachnid pulls open a rift with its front legs and walks out.
 Blackout Red is the default for a fresh settings profile.
 
-In Settings, pick Graphite, Foundry, Glacier, Blackout Red, or Safety Ochre,
+In Settings, pick Graphite, Foundry, Glacier, Blackout Red, or Industrial Yellow,
 then choose Save. The Size slider previews sizes from 70% to 150%.
-Safety Ochre uses ochre enamel, dark trim, grey-green linkages, and warm work
-lights. Saved Industrial Yellow profiles automatically use Safety Ochre.
+Industrial Yellow has weathered yellow plating, exposed wiring, and a segmented
+cyan visor that glitches briefly on wake-up and pickup.
 Click sound is muted by default. Preferences are stored per Windows user.
 Enable Bird's-eye view to roam in any direction on the current display.
 Use the side view to climb and perch on application windows.

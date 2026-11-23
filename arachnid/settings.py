@@ -35,8 +35,6 @@ class Preferences:
     @classmethod
     def load(cls, store: QSettings) -> "Preferences":
         finish = store.value("appearance/finish", DEFAULT_FINISH, type=str)
-        if finish.casefold() in {"neon", "industrial yellow"}:
-            finish = "safety-ochre"
         return cls(
             finish if finish in FINISHES else DEFAULT_FINISH,
             store.value("feedback/effects", True, type=bool),

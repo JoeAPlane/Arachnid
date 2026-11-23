@@ -214,7 +214,7 @@ def test_sleep_fullscreen_and_geometry_changes_preserve_or_clear_attachment(pet,
     assert screen.availableGeometry().contains(pet.frameGeometry())
 
 
-@pytest.mark.parametrize("finish", ("graphite", "safety-ochre"))
+@pytest.mark.parametrize("finish", ("graphite", "neon"))
 @pytest.mark.parametrize("scale", (0.7, 1.0, 1.5))
 def test_art_stays_inside_physical_boundaries_at_both_corners(pet, finish, scale):
     track = DesktopTrack.from_screen(PHYSICAL, WORK, -1, scale)

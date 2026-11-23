@@ -60,6 +60,28 @@ _TOP_ARMOR = _polygon((-34, -10), (-24, -17), (12, -18), (25, -11), (25, 11),
                       (12, 18), (-24, 17), (-34, 10))
 _TOP_VISOR = _polygon((26, -12), (40, -14), (48, -8), (48, 8), (40, 14), (26, 12))
 
+_NEON_FRAME = QColor("#161820")
+_NEON_EDGE = QColor("#62564a")
+_NEON_WEAR = QColor("#fff39b")
+_NEON_CABLE = QColor("#ff367b")
+_NEON_HULL = _polygon((-43, -6), (-36, -16), (-20, -21), (11, -20), (19, -15),
+                      (36, -16), (51, -8), (49, 8), (36, 14), (16, 12), (8, 17),
+                      (-25, 16), (-39, 10))
+_NEON_PLATE = _polygon((-37, -8), (-31, -15), (-20, -19), (9, -18), (20, -12),
+                       (16, -5), (3, -3), (0, 1), (-26, 3), (-35, -1))
+_NEON_TOP = _polygon((-43, -10), (-32, -21), (-11, -24), (17, -20), (24, -16),
+                     (43, -17), (50, -10), (50, 10), (43, 17), (24, 16),
+                     (10, 23), (-17, 24), (-35, 18), (-43, 10))
+_NEON_TOP_PLATE = _polygon((-34, -10), (-26, -17), (-10, -20), (12, -17), (22, -10),
+                           (17, -4), (21, 8), (11, 16), (-17, 20), (-31, 13), (-35, 3))
+_NEON_LENS = _polygon((-14, -4), (-9, -7), (10, -7), (14, -3), (13, 4),
+                      (10, 6), (-10, 6), (-14, 2))
+_NEON_VISOR_SEGMENTS = (
+    _polygon((-11, -1), (-8, -3), (-5, -3), (-6, 2), (-11, 2)),
+    _polygon((-3, -3), (3, -3), (2, 2), (-4, 2)),
+    _polygon((5, -3), (10, -3), (12, -1), (9, 2), (4, 2)),
+)
+
 # (hip, resting foot X, knee bend); each bank has rear, middle, and front legs.
 _FAR_LEGS = (((-24, -1), -46, 1), ((-3, -1), -8, 1), ((20, -1), 43, -1))
 _NEAR_LEGS = (((-23, 8), -56, 1), ((0, 11), -1, -1), ((21, 8), 54, -1))
@@ -120,6 +142,7 @@ class MechanicalPuppet(QGraphicsObject):
         self._curled_sleep = False
         self._curl = 0.0
         self._activity = Activity.WANDERING
+        self._waking = False
         self._gaze = (0, 0)
         self._visual_gaze = QPointF()
         self._tail_lag = 0.0
@@ -304,6 +327,7 @@ class MechanicalPuppet(QGraphicsObject):
 
     def set_finish(self, finish: str) -> None:
         palette = FINISHES[finish]
+        self._neon = finish == "neon"
         self._armor = _metal(*palette.armor, -17, 4)
         self._trim = QColor(palette.trim)
         self._links = QColor(palette.links)
@@ -359,6 +383,7 @@ class MechanicalPuppet(QGraphicsObject):
 
     def set_activity(self, activity: Activity, gaze: tuple[int, int] = (0, 0)) -> None:
         if activity is not self._activity:
+            self._waking = self._activity.resting and not activity.resting
             self._target_posture = {
                 Activity.RESTING: -5.5, Activity.SLEEPING: -7.0,
                 Activity.OBSERVING: -1.5, Activity.REACTING: 1.5,
@@ -686,6 +711,9 @@ class MechanicalPuppet(QGraphicsObject):
 
         scale = 1 - 0.03 * self._suspension() + self._landing() * 0.012
         painter.scale(scale, scale)
+        if self._neon:
+            self._paint_neon(painter, accent, overhead=True)
+            return
         rim = _WHITE if self._hovered else _INK
         painter.setPen(QPen(rim, 2))
         painter.setBrush(_HULL_METAL)
@@ -733,6 +761,9 @@ class MechanicalPuppet(QGraphicsObject):
                                         0.6 + 2.55 * opening, 2 + 1.15 * opening)
 
     def _paint_body(self, painter, accent: QColor, drawn_facing: int) -> None:
+        if self._neon:
+            self._paint_neon(painter, accent, overhead=False)
+            return
         rim = _WHITE if self._hovered else _INK
         painter.setPen(QPen(rim, 2))
         painter.setBrush(_HULL_METAL)
@@ -799,4 +830,74 @@ class MechanicalPuppet(QGraphicsObject):
                                             -1 + (eye[1] + 1) * opening),
                                     3 + (radius - 3) * opening, 0.9 + (radius - 0.9) * opening)
         _disc(painter, (28, 4), 1.45, accent)
+        painter.restore()
+
+    def _paint_neon(self, painter, accent: QColor, *, overhead: bool) -> None:
+        painter.setPen(QPen(_WHITE if self._hovered else _INK, 2))
+        painter.setBrush(_NEON_FRAME)
+        painter.drawPath(_NEON_TOP if overhead else _NEON_HULL)
+        painter.setPen(QPen(_NEON_EDGE, 1))
+        painter.setBrush(self._armor)
+        painter.drawPath(_NEON_TOP_PLATE if overhead else _NEON_PLATE)
+        _line(painter, (-30, -12), (-21, -16), 1, _NEON_WEAR)
+        _line(painter, (-20, -16), (-10, -16), 0.8, _NEON_WEAR)
+
+        for x in (-25, -19, -13):
+            _line(painter, (x, -5), (x + 4, -10), 2.5, _NEON_FRAME)
+        for x, y in ((-6, -11), (-1, -8), (10, -11), (13, -5)):
+            _line(painter, (x, y), (x + 2, y - 0.6), 0.8, _NEON_EDGE)
+        for x, y in ((-31, -5), (8, -14), (13, 6 if overhead else -4)):
+            _disc(painter, (x, y), 1.7, _NEON_FRAME)
+            _line(painter, (x - 0.6, y + 0.3), (x + 0.6, y - 0.3), 0.7, _NEON_WEAR)
+
+        # The cables run under the broken edge of the armor to the visor mount.
+        if overhead:
+            cable_start, bend, cable_end = (-31, 13), (-22, 19), (23, 12)
+        else:
+            cable_start, bend, cable_end = (-35, 3), (-24, 11), (25, 6)
+        for offset, color in ((0, _NEON_CABLE), (3, self._trim)):
+            x, y = cable_start
+            joint_x, joint_y = bend
+            end_x, end_y = cable_end
+            joint = (joint_x, joint_y + offset)
+            _line(painter, (x, y + offset), joint, 1.4, color)
+            _line(painter, joint, (end_x, end_y + offset), 1.4, color)
+        _line(painter, (bend[0] + 8, bend[1] - 1), (bend[0] + 9, bend[1] + 3), 2, _NEON_EDGE)
+
+        painter.save()
+        painter.translate(37, 0 if overhead else -5)
+        if overhead:
+            painter.rotate(-90)
+        painter.setPen(QPen(_NEON_EDGE, 1.4))
+        painter.setBrush(_LENS)
+        painter.drawPath(_NEON_LENS)
+        painter.setClipPath(_NEON_LENS)
+
+        wake = 1.0
+        if self._waking and self._posture_transition.state() == QAbstractAnimation.State.Running:
+            wake = self._posture_transition.currentTime() / self._posture_transition.duration()
+        pickup = self._carry_progress * 2.5 if self._held else 1.0
+        glitch = min(wake, pickup)
+        if self._pet_progress < 1 and not self._held and self._activity is not Activity.SLEEPING:
+            for eye_x in (-6, 6):
+                _happy_eye(painter, eye_x, 0, 3.9, self._eye_closure(), accent)
+        elif glitch < 1:
+            phase = int(glitch * 6)
+            _line(painter, (-12, -2), (-4 + phase, -2), 1.5, accent)
+            _line(painter, (0, 2), (12, 2), 1.25, _NEON_CABLE if phase % 2 else accent)
+            _disc(painter, (9 - phase, -3.5), 1.05, _WHITE)
+        elif self._optic_opening() == 0:
+            _line(painter, (-3, 1), (3, 1), 1.35, accent)
+        elif self._held:
+            _line(painter, (-10, -2), (-4, 1), 1.8, accent)
+            _line(painter, (4, 1), (10, -2), 1.8, accent)
+            _line(painter, (-2, 3), (2, 3), 1.1, _NEON_CABLE)
+        else:
+            light = _WHITE if self._light_pulse > 0.45 else accent
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(light)
+            opening = self._optic_opening()
+            painter.scale(1, 0.35 + 0.65 * opening)
+            for segment in _NEON_VISOR_SEGMENTS:
+                painter.drawPath(segment)
         painter.restore()

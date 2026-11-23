@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from ctypes import wintypes
+from dataclasses import dataclass
 from math import atan2, copysign, cos, degrees, hypot, radians, sin
 from pathlib import Path
 from random import choice
@@ -22,6 +23,9 @@ from PySide6.QtWidgets import (
 
 from .behavior import Activity, Behavior
 from .character import MechanicalPuppet
+from .desktop_edges import (
+    ATTACH_TIME, DesktopEdge, DesktopPose, DesktopRoute, DesktopTrack, SurfaceContact, smooth,
+)
 from .feedback import play_click
 from .movement import advance, clamp_origin, weighted_offset
 from .navigation import Edge, WindowRoute
@@ -34,13 +38,21 @@ _WM_CANCELMODE = 0x001F
 _WM_CAPTURECHANGED = 0x0215
 
 
+@dataclass
+class _EdgeTransfer:
+    start: DesktopPose
+    end: DesktopPose
+    attaching: bool
+    time: float = 0.0
+
+
 class Overlay(QGraphicsView):
     WIDTH = MechanicalPuppet.WIDTH
     HEIGHT = MechanicalPuppet.HEIGHT
     FRAME_MS = 16
 
     def __init__(self, speed: float, paused: bool, store: QSettings | None = None,
-                 *, startup: bool = False) -> None:
+                 *, startup: bool = False, desktop_preview: bool = False) -> None:
         super().__init__()
         self._press: QPoint | None = None
         self._startup_pending = startup
@@ -83,6 +95,11 @@ class Overlay(QGraphicsView):
         self._behavior = Behavior()
         self._foreground: ForegroundWindow | None = None
         self._route: WindowRoute | None = None
+        self._desktop_route: DesktopRoute | None = None
+        self._desktop_transfer: _EdgeTransfer | None = None
+        self._desktop_screen: QScreen | None = None
+        self._desktop_geometry = None
+        self._desktop_cooldown = 14.0
         self.fullscreen_suppressed = False
         self._user_hidden = False
         self._paused = paused
@@ -96,6 +113,13 @@ class Overlay(QGraphicsView):
         self._pause_action = self._menu.addAction("Resume" if paused else "Pause")
         self._pause_action.triggered.connect(self._toggle_pause)
         self._rest_action = self._menu.addAction("Rest", self._toggle_rest)
+        if desktop_preview:
+            edges = self._menu.addMenu("Desktop Edge Preview")
+            edges.addAction("Climb Left Edge", lambda: self._preview_edge(-1))
+            edges.addAction("Climb Right Edge", lambda: self._preview_edge(1))
+            edges.addAction("Preview Upper Corner", lambda: self._preview_edge(-1, near_top=True))
+            edges.addAction("Reverse Direction", self._reverse_desktop)
+            edges.addAction("Detach", self._detach_desktop)
         self._settings_action = self._menu.addAction("Settings…", self._open_settings)
         self._quit_action = self._menu.addAction("Quit Arachnid", self._quit)
         self._quitting = False
@@ -251,6 +275,11 @@ class Overlay(QGraphicsView):
         if grab_point is not None and QGuiApplication.screenAt(grab_point) is None:
             self._end_press()
         screen = self._current_screen()
+        if self._desktop_route is not None:
+            if self._desktop_matches(screen):
+                self._sync_timers()
+                return
+            self._discard_desktop(screen)
         if screen is not None:
             self._place(self.pos(), screen)
             if self._dragging:
@@ -316,7 +345,7 @@ class Overlay(QGraphicsView):
         )
 
     def _try_window(self, travel: float = 0) -> bool:
-        if self._preferences.birdseye:
+        if self._preferences.birdseye or self._desktop_route is not None:
             return False
         screen = self._current_screen()
         if screen is None:
@@ -359,6 +388,131 @@ class Overlay(QGraphicsView):
         self._puppet.stand(immediate=True)
         self._puppet.walk(0, 1 if self._velocity > 0 else -1)
 
+    @staticmethod
+    def _screen_key(screen: QScreen):
+        return screen.geometry(), screen.availableGeometry(), screen.devicePixelRatio()
+
+    def _desktop_matches(self, screen: QScreen | None) -> bool:
+        return (screen is not None and screen is self._desktop_screen
+                and self._desktop_geometry == self._screen_key(screen))
+
+    def _desktop_track(self, screen: QScreen, side: int) -> DesktopTrack | None:
+        if (self._route is not None or self._desktop_route is not None
+                or self._preferences.birdseye or not self._allowed_centers(screen).isValid()):
+            return None
+        if (self._press is not None or self._settings_dialog is not None
+                or self.fullscreen_suppressed or self._behavior.activity is Activity.SLEEPING):
+            return None
+        return DesktopTrack.from_screen(QRectF(screen.geometry()), QRectF(screen.availableGeometry()),
+                                        side, self.transform().m11())
+
+    def _attach_desktop(self, track: DesktopTrack, screen: QScreen) -> None:
+        center = self._center()
+        self._desktop_route = DesktopRoute(track, track.attach_at(center))
+        self._desktop_screen = screen
+        self._desktop_geometry = self._screen_key(screen)
+        self._desktop_cooldown = 26.0
+        target = self._desktop_route.pose()
+        start = DesktopPose(center, 0, target.facing, DesktopEdge.SIDE)
+        self._desktop_transfer = _EdgeTransfer(start, target, attaching=True)
+
+    def _center(self) -> QPointF:
+        return QPointF(self.x() + self.width() / 2, self.y() + self.height() / 2)
+
+    def _preview_edge(self, side: int, *, near_top: bool = False) -> None:
+        screen = self._current_screen()
+        if screen is None or self._puppet.entering or not self.isVisible():
+            return
+        track = self._desktop_track(screen, side)
+        if track is None:
+            return
+        area = screen.availableGeometry()
+        x = area.x() if side < 0 else area.x() + area.width() - self.width()
+        y = min(track.bottom, track.high + 44) if near_top else track.bottom
+        self._place(QPoint(x, round(y - self.height() / 2)), screen)
+        self._attach_desktop(track, screen)
+        # The explicit preview overrides an idle decision, but honors Pause.
+        self._behavior.wake()
+        self._show_activity()
+        self._sync_timers()
+
+    def _reverse_desktop(self) -> None:
+        if self._desktop_route is not None and self._desktop_transfer is None:
+            self._desktop_route.direction *= -1
+
+    def _detach_desktop(self) -> None:
+        if self._desktop_route is None or self._desktop_transfer is not None:
+            return
+        self._start_desktop_detach()
+
+    def _start_desktop_detach(self) -> None:
+        route = self._desktop_route
+        start = route.pose()
+        area = route.track.area
+        center = QPointF(start.center)
+        allowed = area.adjusted(self.width() / 2, self.height() / 2,
+                                -self.width() / 2, -self.height() / 2)
+        center.setX(max(allowed.left(), min(center.x(), allowed.right())))
+        center.setY(max(allowed.top(), min(center.y(), allowed.bottom())))
+        angle = round(start.angle / 360) * 360
+        end = DesktopPose(center, angle, start.facing, start.edge)
+        self._desktop_transfer = _EdgeTransfer(start, end, attaching=False)
+
+    def _discard_desktop(self, screen: QScreen | None = None, *, facing: int | None = None) -> None:
+        self._desktop_route = None
+        self._desktop_transfer = None
+        self._desktop_screen = None
+        self._desktop_geometry = None
+        self._puppet.set_desktop_contact(None)
+        if screen is not None:
+            self._place(self.pos(), screen)
+        if facing is None:
+            facing = 1 if self._velocity > 0 else -1
+        self._velocity = copysign(abs(self._velocity), facing)
+        self._puppet.stand(immediate=True)
+        self._puppet.walk(0, facing)
+
+    def _paint_desktop_pose(self, pose: DesktopPose, distance: float, strength: float) -> None:
+        # The window has transparent padding. Only the artwork approaches the wall.
+        position = (pose.center - QPointF(self.width() / 2, self.height() / 2)).toPoint()
+        self.move(position)
+        self._x, self._y = float(position.x()), float(position.y())
+        scale = self.transform().m11()
+        area = self._desktop_route.track.area
+        center = self._center()
+        self._puppet.set_desktop_contact(SurfaceContact.from_area(area, center, scale, strength))
+        self._puppet.walk(distance / scale, pose.facing, pose.angle)
+
+    def _step_desktop(self, screen: QScreen, distance: float, elapsed: float) -> None:
+        if not self._desktop_matches(screen):
+            self._discard_desktop(screen)
+            return
+        transfer = self._desktop_transfer
+        route = self._desktop_route
+        if transfer is None:
+            route.advance(distance)
+            self._paint_desktop_pose(route.pose(), distance, 1.0)
+            if route.finished:
+                self._start_desktop_detach()
+            return
+        transfer.time += elapsed
+        progress = smooth(transfer.time / ATTACH_TIME)
+        start, end = transfer.start, transfer.end
+        # On release, gain clearance before turning the tail toward the wall.
+        angle_progress = progress if transfer.attaching else smooth((progress - 0.12) / 0.88)
+        position_progress = progress if transfer.attaching else smooth(progress * 1.60)
+        angle = start.angle + (end.angle - start.angle) * angle_progress
+        center = start.center + (end.center - start.center) * position_progress
+        strength = progress if transfer.attaching else 1 - progress
+        pose = DesktopPose(center, angle, end.facing, end.edge)
+        self._paint_desktop_pose(pose, distance * (0.6 + 0.4 * progress), strength)
+        if progress == 1:
+            self._desktop_transfer = None
+            if not transfer.attaching:
+                # Leave the boundary facing into the screen, regardless of its side.
+                facing = 1 if end.center.x() < route.track.area.center().x() else -1
+                self._discard_desktop(screen, facing=facing)
+
     def _sync_timers(self) -> None:
         active = self.isVisible() and QGuiApplication.primaryScreen() is not None and not (
             self.fullscreen_suppressed or self._paused or self._press is not None or self._menu_open
@@ -394,10 +548,10 @@ class Overlay(QGraphicsView):
         if self._behavior.update(elapsed, distance):
             if self._preferences.birdseye:
                 self._heading += choice((-1, 1)) * radians(70)
-            elif self._route is None:
-                self._velocity = -self._velocity
-            else:
+            elif self._route is not None:
                 self._route.reverse()
+            elif self._desktop_route is None:
+                self._velocity = -self._velocity
 
         gaze = (0, 0)
         if self._behavior.activity is Activity.OBSERVING and distance is not None:
@@ -416,7 +570,10 @@ class Overlay(QGraphicsView):
             self._sync_timers()
             return
         climbing = self._route is not None and self._route.edge in (Edge.SIDE, Edge.CORNER)
-        target_scale = 0.72 if climbing else 1.0
+        desktop = self._desktop_route is not None
+        target_scale = 0.72 if climbing or desktop else 1.0
+        if not desktop:
+            self._desktop_cooldown = max(0.0, self._desktop_cooldown - elapsed)
         change = elapsed / 0.18
         previous_scale = self._speed_scale
         self._speed_scale += min(change, max(-change, target_scale - self._speed_scale))
@@ -429,11 +586,22 @@ class Overlay(QGraphicsView):
             self._route.advance(distance)
             self._place_on_window(screen, distance)
             return
+        if desktop:
+            self._step_desktop(screen, distance, elapsed)
+            return
         if distance and self._try_window(distance):
             return
 
         area = screen.availableGeometry()
         right = area.x() + max(0, area.width() - self.width())
+        if distance and not self._desktop_cooldown:
+            side = 1 if self._velocity > 0 else -1
+            wall = right if side > 0 else area.x()
+            if 0 <= (wall - self._x) * side <= max(distance, 8):
+                track = self._desktop_track(screen, side)
+                if track is not None:
+                    self._attach_desktop(track, screen)
+                    return
         self._x, self._velocity = advance(
             self._x, self._velocity, moving_time, area.x(), right
         )
@@ -539,6 +707,8 @@ class Overlay(QGraphicsView):
         if not self._dragging and distance >= QApplication.startDragDistance():
             self._dragging = True
             self._leave_window()
+            if self._desktop_route is not None:
+                self._discard_desktop(self._current_screen())
             self._drag_position = QPointF(self.pos())
             self._last_drag_tick = perf_counter()
             self._puppet.set_held(True)
@@ -624,6 +794,8 @@ class Overlay(QGraphicsView):
         if self._behavior.activity.resting:
             self._behavior.wake()
         else:
+            if self._desktop_transfer is not None:
+                self._discard_desktop(self._current_screen())
             self._behavior.sleep()
         self._show_activity()
         self._sync_timers()
@@ -647,6 +819,11 @@ class Overlay(QGraphicsView):
         dialog = self._settings_dialog
         self._settings_dialog = None
         if result == QDialog.DialogCode.Accepted:
+            if self._desktop_route is not None and (
+                self._preferences.birdseye != dialog.preferences.birdseye
+                or self._preferences.size != dialog.preferences.size
+            ):
+                self._discard_desktop(self._current_screen())
             if self._preferences.birdseye != dialog.preferences.birdseye:
                 self._leave_window()
                 self._puppet.set_birdseye(dialog.preferences.birdseye)

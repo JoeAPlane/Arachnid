@@ -26,6 +26,7 @@ def main() -> int:
         "--speed", type=_speed, default=110,
         help="horizontal speed in logical pixels per second (default: 110)"
     )
+    parser.add_argument("--desktop-edge-preview", action="store_true", help="show manual desktop-edge controls")
     parser.add_argument("--paused", action="store_true", help="start with motion paused")
     parser.add_argument("--watch-windows", action="store_true", help="log window bounds changes")
     parser.add_argument(
@@ -60,7 +61,8 @@ def main() -> int:
     except RuntimeError as error:
         QMessageBox.warning(None, "Arachnid", str(error))
         return 1
-    overlay = Overlay(args.speed, args.paused, store=store, startup=not args.paused)
+    overlay = Overlay(args.speed, args.paused, store=store, startup=not args.paused,
+                      desktop_preview=args.desktop_edge_preview)
     overlay.install_tray()
     instance.reopen.connect(overlay.reopen)
     monitor = WindowMonitor(app, args.watch_windows)

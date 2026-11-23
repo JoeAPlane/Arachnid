@@ -8,7 +8,9 @@ from PySide6.QtWidgets import QGraphicsObject
 
 from .appearance import DEFAULT_FINISH, FINISHES
 from .behavior import Activity
+from .desktop_edges import SurfaceContact
 from .gait import CYCLE_DISTANCE, foot_at, knee_at
+from .navigation import FOOT_CONTACT
 
 type Point = tuple[float, float]
 
@@ -134,6 +136,7 @@ class MechanicalPuppet(QGraphicsObject):
         self._turn_progress = 1.0
         self._light_pulse = 0.0
         self._birdseye = False
+        self._desktop_contact: SurfaceContact | None = None
         self._held = False
         self._carry_from = 0.0
         self._drag_tilt = 0.0
@@ -211,6 +214,11 @@ class MechanicalPuppet(QGraphicsObject):
     def set_drag_lag(self, dx: float) -> None:
         self._drag_tilt = -dx * 0.32
         self.update()
+
+    def set_desktop_contact(self, contact: SurfaceContact | None) -> None:
+        if self._desktop_contact != contact:
+            self._desktop_contact = contact
+            self.update()
 
     def set_birdseye(self, enabled: bool) -> None:
         if self._birdseye != enabled:
@@ -423,7 +431,11 @@ class MechanicalPuppet(QGraphicsObject):
             _disc(painter, (3, y), 3.8, heart)
             painter.drawPath(_polygon((-6.5, y + 1), (6.5, y + 1), (0, y + 8)))
         wiggle = self._struggle() + affection * 0.58 * sin(5 * pi * self._pet_progress)
-        painter.rotate(self.angle + self._drag_tilt * self._suspension() + 5 * wiggle)
+        contact = self._desktop_contact
+        angle = self.angle
+        if contact is None:
+            angle += self._drag_tilt * self._suspension() + 5 * wiggle
+        painter.rotate(angle)
         accent = self._optic
         if self._activity.resting:
             accent = accent.darker(235 if self._activity is Activity.SLEEPING else 200)
@@ -436,13 +448,14 @@ class MechanicalPuppet(QGraphicsObject):
         painter.scale(drawn_facing * turn_width, 1)
         bob = self._posture + self.blend * (1 - cos(4 * pi * self.phase))
         bob += self._landing() - 6 * self._suspension() - 5 * affection - 7 * self._curl
-        self._paint_legs(painter, far=True, bob=bob, wiggle=wiggle)
+        projection = None if contact is None else contact.leg_projector(angle, drawn_facing * turn_width)
+        self._paint_legs(painter, far=True, bob=bob, wiggle=wiggle, projection=projection)
         self._paint_tail(painter, bob, accent, wiggle)
         painter.save()
         painter.translate(0, -bob)
         self._paint_body(painter, accent, drawn_facing)
         painter.restore()
-        self._paint_legs(painter, far=False, bob=bob, wiggle=wiggle)
+        self._paint_legs(painter, far=False, bob=bob, wiggle=wiggle, projection=projection)
         painter.restore()
 
     def _struggle(self) -> float:
@@ -458,10 +471,13 @@ class MechanicalPuppet(QGraphicsObject):
         progress = self._carry_progress
         return -8 * self._carry_from * sin(2.5 * pi * progress) * (1 - progress)**2
 
-    def _paint_legs(self, painter, *, far: bool, bob: float, wiggle: float) -> None:
+    def _paint_legs(self, painter, *, far: bool, bob: float, wiggle: float, projection=None) -> None:
         legs = _FAR_LEGS if far else _NEAR_LEGS
         tuck = self._suspension()
         floor = 28 if far else 41
+        if self._desktop_contact is not None:
+            floor += (FOOT_CONTACT - floor) * self._desktop_contact.strength
+            wiggle *= 1 - self._desktop_contact.strength
         upper, lower = (25, 29) if far else (29, 35)
         for index, ((hip_x, hip_y), foot_x, bend) in enumerate(legs):
             # Far-front, far-rear, and near-middle form one tripod.
@@ -471,18 +487,28 @@ class MechanicalPuppet(QGraphicsObject):
             foot = foot_at(phase, foot_x, floor, self.blend)
             kick = (1 - 2 * tripod) * wiggle
             foot = (foot[0] * (1 - 0.16 * tuck) + 10 * kick, foot[1] + 5 * tuck + 6 * kick)
-            foot = _between(foot, (hip_x * 0.9, floor - (1 if far else 4)), self._curl)
+            curl = self._curl
+            toe_tip = None
+            if projection is not None:
+                inside, planted = projection
+                curl *= 1 - self._desktop_contact.strength
+            foot = _between(foot, (hip_x * 0.9, floor - (1 if far else 4)), curl)
+            if projection is not None:
+                foot = planted(foot)
+                toe_tip = inside((foot[0] + 4, foot[1]))
             knee = knee_at(hip, foot, upper, lower, bend)
-            self._paint_leg(painter, hip, knee, foot, far, toe=4)
+            if projection is not None:
+                knee = inside(knee, 3.0)
+            self._paint_leg(painter, hip, knee, foot, far, toe=4, toe_tip=toe_tip)
 
-    def _paint_leg(self, painter, hip, knee, foot, far: bool, toe: float) -> None:
+    def _paint_leg(self, painter, hip, knee, foot, far: bool, toe: float, *, toe_tip=None) -> None:
         link = _FAR if far else self._links
         joint = _STEEL if far else _LIGHT_STEEL
         _line(painter, hip, knee, 9 if far else 11, _INK)
         _line(painter, knee, foot, 7 if far else 8, _INK)
         _line(painter, hip, knee, 5 if far else 7, link)
         _line(painter, knee, foot, 3.5 if far else 4, link)
-        _line(painter, foot, (foot[0] + toe, foot[1]), 4, _INK)
+        _line(painter, foot, toe_tip if toe_tip is not None else (foot[0] + toe, foot[1]), 4, _INK)
         if not far:
             _line(painter, _between(hip, knee, 0.24), _between(hip, knee, 0.73), 2, self._trim)
             _line(painter, _between(knee, foot, 0.22), _between(knee, foot, 0.78), 1.5, _LIGHT_STEEL)

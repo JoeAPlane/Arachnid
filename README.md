@@ -85,3 +85,25 @@ In the commands below, set the interpreter path to the extracted
 ```
 
 The script puts the portable app folder, ZIP, SHA-256 checksum, and PyInstaller files under `Documents\ARACHNID\<version>`. For another build of the same version, pass `-OutputDirectory` with a fresh subfolder of `Documents\ARACHNID`. The script refuses a destination containing a previous build.
+
+## Preview physical desktop edges
+
+Use the normal side view. From the Phase 7.2 checkout, run:
+
+```powershell
+& .\.venv\Scripts\python.exe -m arachnid --desktop-edge-preview --settings-file phase72-preview.ini
+```
+
+Right-click Arachnid and open **Desktop Edge Preview**. **Climb Left Edge**
+and **Climb Right Edge** start at the corresponding lower boundary.
+**Preview Upper Corner** starts near the upper-left turn, so you can watch
+Arachnid go onto the ceiling and down the opposite edge sooner.
+**Reverse Direction** reverses an attached crawl and **Detach** returns it
+to the desktop. Use **Pause** or **Rest** to stop while attached. Dragging
+releases the edge immediately.
+
+Without the preview flag, Arachnid still roams normally and occasionally
+explores the active screen's edges. A taskbar on an edge blocks that physical
+surface. On a display with a top taskbar, Arachnid can climb a free side and
+retrace its route. Desktop edges use Qt logical pixels. Routes stay on one
+display and reset if its geometry or scaling changes.
